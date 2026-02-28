@@ -15,6 +15,9 @@ export class SumoMode extends GameMode {
   private outerGroundMesh!: THREE.Mesh;
   private ringMarkerInner!: THREE.Mesh;
   private ringMarkerOuter!: THREE.Mesh;
+  private dangerZoneMesh!: THREE.Mesh;
+  private edgeGlowMesh!: THREE.Mesh;
+  private edgePosts: THREE.Mesh[] = [];
   private groundBody!: CANNON.Body;
 
   // Scoring zone
@@ -40,11 +43,13 @@ export class SumoMode extends GameMode {
 
   private readonly ARENA_RADIUS = 12;
   private readonly ZONE_RADIUS = 4;
-  private readonly PLAYER_SPEED = 50;
-  private readonly DASH_FORCE = 200;
-  private readonly DASH_COOLDOWN = 2;
+  private readonly PLAYER_SPEED = 65;
+  private readonly DASH_FORCE = 280;
+  private readonly DASH_COOLDOWN = 1.5;
   private readonly ZONE_ORBIT_RADIUS = 5;
   private readonly ZONE_ORBIT_SPEED = 0.4;
+  private readonly PUSH_RADIUS = 2.0;
+  private readonly PUSH_FORCE = 150;
 
   public setup(): void {
     this.scoreP1 = 0;
@@ -55,10 +60,12 @@ export class SumoMode extends GameMode {
     this.p1LastDir = new CANNON.Vec3(0, 0, -1);
     this.p2LastDir = new CANNON.Vec3(0, 0, 1);
     this.sceneObjects = [];
+    this.edgePosts = [];
 
     this.setupCamera();
     this.addLighting(0xffe0a0);
     this.createArena();
+    this.createArenaBoundaryVisuals();
     this.createScoringZone();
     this.createPlayers();
     this.createGround();
@@ -66,11 +73,13 @@ export class SumoMode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) {return;}
+    if (!this.isActive) {
+      return;
+    }
 
     this.elapsed += delta;
 
-    // Player movement
+    // Player movement with dynamic forces
     this.handlePlayerMovement(this.p1Body, P1_CONTROLS, this.PLAYER_SPEED);
     this.handlePlayerMovement(this.p2Body, P2_CONTROLS, this.PLAYER_SPEED);
 
@@ -78,11 +87,18 @@ export class SumoMode extends GameMode {
     this.updateFacingDirection(this.p1Body, this.p1LastDir);
     this.updateFacingDirection(this.p2Body, this.p2LastDir);
 
+    // Rotate player meshes to face movement direction
+    this.rotateToVelocity(this.p1Mesh, this.p1Body);
+    this.rotateToVelocity(this.p2Mesh, this.p2Body);
+
     // Dash / push mechanic
     this.p1DashCooldown = Math.max(0, this.p1DashCooldown - delta);
     this.p2DashCooldown = Math.max(0, this.p2DashCooldown - delta);
     this.handleDash(this.p1Body, this.p1LastDir, P1_CONTROLS.action1, 'p1');
     this.handleDash(this.p2Body, this.p2LastDir, P2_CONTROLS.action1, 'p2');
+
+    // Collision-based push between players
+    this.handlePlayerCollisionPush();
 
     // Keep players on ground
     this.p1Body.position.y = 0.6;
@@ -104,6 +120,9 @@ export class SumoMode extends GameMode {
     const glowMat = this.zoneGlowMesh.material as THREE.MeshStandardMaterial;
     glowMat.emissiveIntensity = pulse * 2;
     glowMat.opacity = 0.3 + 0.2 * pulse;
+
+    // Animate edge boundary glow
+    this.animateEdgeBoundary();
 
     // Scoring
     this.updateScoring(delta);
@@ -140,9 +159,7 @@ export class SumoMode extends GameMode {
     this.sceneObjects.push(this.outerGroundMesh);
 
     // Dohyō platform (dark wood/tan, slightly elevated)
-    const platformGeo = new THREE.CylinderGeometry(
-      this.ARENA_RADIUS, this.ARENA_RADIUS, 0.3, 64
-    );
+    const platformGeo = new THREE.CylinderGeometry(this.ARENA_RADIUS, this.ARENA_RADIUS, 0.3, 64);
     const platformMat = new THREE.MeshStandardMaterial({
       color: 0x8b7355,
       roughness: 0.7,
@@ -156,9 +173,7 @@ export class SumoMode extends GameMode {
     this.sceneObjects.push(this.platformMesh);
 
     // Inner ring marker (tawara-style boundary)
-    const innerRingGeo = new THREE.RingGeometry(
-      this.ARENA_RADIUS - 0.4, this.ARENA_RADIUS, 64
-    );
+    const innerRingGeo = new THREE.RingGeometry(this.ARENA_RADIUS - 0.4, this.ARENA_RADIUS, 64);
     const innerRingMat = new THREE.MeshStandardMaterial({
       color: 0x3b2f1e,
       roughness: 0.6,
@@ -171,7 +186,9 @@ export class SumoMode extends GameMode {
 
     // Decorative inner circle marker
     const outerRingGeo = new THREE.RingGeometry(
-      this.ARENA_RADIUS - 1.5, this.ARENA_RADIUS - 1.2, 64
+      this.ARENA_RADIUS - 1.5,
+      this.ARENA_RADIUS - 1.2,
+      64
     );
     const outerRingMat = new THREE.MeshStandardMaterial({
       color: 0xf5deb3,
@@ -186,11 +203,65 @@ export class SumoMode extends GameMode {
     this.sceneObjects.push(this.ringMarkerOuter);
   }
 
+  private createArenaBoundaryVisuals(): void {
+    // Danger zone ring (red translucent area near the edge)
+    const dangerGeo = new THREE.RingGeometry(this.ARENA_RADIUS - 2.5, this.ARENA_RADIUS, 64);
+    const dangerMat = new THREE.MeshStandardMaterial({
+      color: 0xff2222,
+      emissive: 0xff2222,
+      emissiveIntensity: 0.6,
+      transparent: true,
+      opacity: 0.25,
+      side: THREE.DoubleSide,
+    });
+    this.dangerZoneMesh = new THREE.Mesh(dangerGeo, dangerMat);
+    this.dangerZoneMesh.rotation.x = -Math.PI / 2;
+    this.dangerZoneMesh.position.y = 0.33;
+    this.engine.scene.add(this.dangerZoneMesh);
+    this.sceneObjects.push(this.dangerZoneMesh);
+
+    // Bright glowing edge ring
+    const edgeGlowGeo = new THREE.TorusGeometry(this.ARENA_RADIUS, 0.15, 16, 64);
+    const edgeGlowMat = new THREE.MeshStandardMaterial({
+      color: 0xff4444,
+      emissive: 0xff4444,
+      emissiveIntensity: 2.0,
+      transparent: true,
+      opacity: 0.8,
+    });
+    this.edgeGlowMesh = new THREE.Mesh(edgeGlowGeo, edgeGlowMat);
+    this.edgeGlowMesh.rotation.x = Math.PI / 2;
+    this.edgeGlowMesh.position.y = 0.35;
+    this.engine.scene.add(this.edgeGlowMesh);
+    this.sceneObjects.push(this.edgeGlowMesh);
+
+    // Edge posts (pillars around the arena boundary)
+    const postCount = 16;
+    const postMat = new THREE.MeshStandardMaterial({
+      color: 0xff6644,
+      emissive: 0xff4422,
+      emissiveIntensity: 1.0,
+      roughness: 0.3,
+    });
+    for (let i = 0; i < postCount; i++) {
+      const angle = (i / postCount) * Math.PI * 2;
+      const postGeo = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8);
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(
+        Math.cos(angle) * this.ARENA_RADIUS,
+        0.75,
+        Math.sin(angle) * this.ARENA_RADIUS
+      );
+      post.castShadow = true;
+      this.engine.scene.add(post);
+      this.sceneObjects.push(post);
+      this.edgePosts.push(post);
+    }
+  }
+
   private createScoringZone(): void {
     // Zone ring indicator
-    const zoneGeo = new THREE.RingGeometry(
-      this.ZONE_RADIUS - 0.15, this.ZONE_RADIUS, 64
-    );
+    const zoneGeo = new THREE.RingGeometry(this.ZONE_RADIUS - 0.15, this.ZONE_RADIUS, 64);
     const zoneMat = new THREE.MeshStandardMaterial({
       color: COLORS.SUCCESS,
       emissive: COLORS.SUCCESS,
@@ -285,14 +356,14 @@ export class SumoMode extends GameMode {
     player: 'p1' | 'p2'
   ): void {
     const cooldown = player === 'p1' ? this.p1DashCooldown : this.p2DashCooldown;
-    if (cooldown > 0) {return;}
-    if (!this.engine.input.isDown(actionKey)) {return;}
+    if (cooldown > 0) {
+      return;
+    }
+    if (!this.engine.input.isDown(actionKey)) {
+      return;
+    }
 
-    const impulse = new CANNON.Vec3(
-      dir.x * this.DASH_FORCE,
-      0,
-      dir.z * this.DASH_FORCE
-    );
+    const impulse = new CANNON.Vec3(dir.x * this.DASH_FORCE, 0, dir.z * this.DASH_FORCE);
     body.applyImpulse(impulse, body.position);
 
     if (player === 'p1') {
@@ -323,6 +394,60 @@ export class SumoMode extends GameMode {
     const dx = body.position.x - this.zoneX;
     const dz = body.position.z - this.zoneZ;
     return Math.sqrt(dx * dx + dz * dz);
+  }
+
+  private rotateToVelocity(mesh: THREE.Group, body: CANNON.Body): void {
+    const vx = body.velocity.x;
+    const vz = body.velocity.z;
+    const speed = Math.sqrt(vx * vx + vz * vz);
+    if (speed > 0.5) {
+      mesh.rotation.y = Math.atan2(vx, vz);
+    }
+  }
+
+  private handlePlayerCollisionPush(): void {
+    const dx = this.p2Body.position.x - this.p1Body.position.x;
+    const dz = this.p2Body.position.z - this.p1Body.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < this.PUSH_RADIUS && dist > 0.01) {
+      const nx = dx / dist;
+      const nz = dz / dist;
+      // Relative velocity along collision normal
+      const relVx = this.p1Body.velocity.x - this.p2Body.velocity.x;
+      const relVz = this.p1Body.velocity.z - this.p2Body.velocity.z;
+      const relDot = relVx * nx + relVz * nz;
+      if (relDot > 0) {
+        const pushImpulse = new CANNON.Vec3(
+          nx * this.PUSH_FORCE * relDot * 0.02,
+          0,
+          nz * this.PUSH_FORCE * relDot * 0.02
+        );
+        this.p2Body.applyImpulse(pushImpulse, this.p2Body.position);
+        this.p1Body.applyImpulse(
+          new CANNON.Vec3(-pushImpulse.x, 0, -pushImpulse.z),
+          this.p1Body.position
+        );
+      }
+    }
+  }
+
+  private animateEdgeBoundary(): void {
+    // Pulse the edge glow
+    const edgePulse = 0.5 + 0.5 * Math.sin(this.elapsed * 4);
+    const edgeMat = this.edgeGlowMesh.material as THREE.MeshStandardMaterial;
+    edgeMat.emissiveIntensity = 1.0 + edgePulse * 1.5;
+    edgeMat.opacity = 0.5 + 0.3 * edgePulse;
+
+    // Pulse danger zone
+    const dangerMat = this.dangerZoneMesh.material as THREE.MeshStandardMaterial;
+    dangerMat.opacity = 0.15 + 0.15 * edgePulse;
+
+    // Animate posts height
+    for (let i = 0; i < this.edgePosts.length; i++) {
+      const post = this.edgePosts[i];
+      const phase = (i / this.edgePosts.length) * Math.PI * 2;
+      post.scale.y = 0.8 + 0.3 * Math.sin(this.elapsed * 2 + phase);
+    }
   }
 
   private animateParticles(delta: number): void {

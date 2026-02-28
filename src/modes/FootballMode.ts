@@ -92,8 +92,8 @@ export class FootballMode extends GameMode {
     this.handleJump(this.p2Body, P2_CONTROLS.action2);
 
     // Kick mechanic: apply impulse to ball when action1 pressed near ball
-    this.handleKick(this.p1Body, this.p1Mesh, P1_CONTROLS.action1, 1);
-    this.handleKick(this.p2Body, this.p2Mesh, P2_CONTROLS.action1, 2);
+    this.handleKick(this.p1Body, P1_CONTROLS.action1, 1);
+    this.handleKick(this.p2Body, P2_CONTROLS.action1, 2);
 
     // Keep players from falling below the levitation height
     const playerGroundY = 0.85 + this.LEVITATE_Y;
@@ -582,13 +582,20 @@ export class FootballMode extends GameMode {
 
   private handleKick(
     playerBody: CANNON.Body,
-    _playerMesh: THREE.Group,
     actionKey: string,
     playerNum: number,
   ): void {
     if (!this.engine.input.wasPressed(actionKey)) {
       return;
     }
+
+    // Always trigger kick animation for visual feedback
+    if (playerNum === 1) {
+      this.p1KickTimer = this.KICK_ANIM_DURATION;
+    } else {
+      this.p2KickTimer = this.KICK_ANIM_DURATION;
+    }
+
     const dx = this.ballBody.position.x - playerBody.position.x;
     const dy = this.ballBody.position.y - playerBody.position.y;
     const dz = this.ballBody.position.z - playerBody.position.z;
@@ -606,18 +613,6 @@ export class FootballMode extends GameMode {
         ),
         this.ballBody.position,
       );
-      // Trigger kick animation
-      if (playerNum === 1) {
-        this.p1KickTimer = this.KICK_ANIM_DURATION;
-      } else {
-        this.p2KickTimer = this.KICK_ANIM_DURATION;
-      }
-    }
-    // Even if no ball nearby, trigger kick animation for feedback
-    if (playerNum === 1 && this.p1KickTimer <= 0) {
-      this.p1KickTimer = this.KICK_ANIM_DURATION;
-    } else if (playerNum === 2 && this.p2KickTimer <= 0) {
-      this.p2KickTimer = this.KICK_ANIM_DURATION;
     }
   }
 

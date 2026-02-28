@@ -52,7 +52,7 @@ export const MODE_CONFIGS: ModeConfig[] = [
     name: 'sumo',
     displayName: 'SUMO ARENA',
     icon: '🥊',
-    description: 'Empuja a tu rival fuera de la zona. ¡La arena se achica! Dash (F/Shift) y Salto (G/Enter)',
+    description: 'Empuja a tu rival al borde de la zona. ¡La arena se mueve y cambia de tamaño! ¡Cuidado con los terremotos!',
     duration: 60,
     bgColor: 0x3a2010,
   },

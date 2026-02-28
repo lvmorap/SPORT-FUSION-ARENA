@@ -25,6 +25,11 @@ export class SumoMode extends GameMode {
   private zoneGlowMesh!: THREE.Mesh;
   private zoneX = 0;
   private zoneZ = 0;
+  private zoneVelX = 0;
+  private zoneVelZ = 0;
+  private currentZoneRadius = 4;
+  private zoneRadiusTarget = 4;
+  private zoneResizeTimer = 0;
 
   // Particles
   private particles!: THREE.Points;
@@ -41,19 +46,28 @@ export class SumoMode extends GameMode {
   // Timing
   private elapsed = 0;
 
+  // Earthquake
+  private earthquakeTimer = 0;
+  private readonly EARTHQUAKE_INTERVAL = 6;
+  private readonly EARTHQUAKE_FORCE = 12;
+
   private readonly ARENA_RADIUS = 12;
   private readonly ZONE_RADIUS = 4;
+  private readonly ZONE_RADIUS_MIN = 2;
+  private readonly ZONE_RADIUS_MAX = 6;
+  private readonly ZONE_RESIZE_INTERVAL = 4;
   private readonly PLAYER_SPEED = 10;
   private readonly DASH_FORCE = 35;
   private readonly DASH_COOLDOWN = 1.5;
-  private readonly ZONE_ORBIT_RADIUS = 5;
-  private readonly ZONE_ORBIT_SPEED = 0.4;
+  private readonly ZONE_WANDER_SPEED = 3;
+  private readonly ZONE_DIR_CHANGE_INTERVAL = 2.5;
   private readonly PUSH_RADIUS = 2.2;
   private readonly PUSH_FORCE = 150;
   private readonly ARENA_MIN_RADIUS = 5;
   private readonly JUMP_FORCE = 8;
   private readonly JUMP_COOLDOWN = 2;
   private readonly DASH_ENEMY_PUSH = 200;
+  private readonly BOUNDARY_SCORE_POINTS = 1;
 
   private currentArenaRadius = 12;
   private arenaCenterX = 0;
@@ -62,6 +76,9 @@ export class SumoMode extends GameMode {
   private p2JumpCooldown = 0;
   private p1IsJumping = false;
   private p2IsJumping = false;
+  private zoneDirTimer = 0;
+  private p1AtBoundary = false;
+  private p2AtBoundary = false;
 
   public setup(): void {
     this.scoreP1 = 0;
@@ -80,6 +97,15 @@ export class SumoMode extends GameMode {
     this.p2IsJumping = false;
     this.sceneObjects = [];
     this.edgePosts = [];
+    this.zoneVelX = this.ZONE_WANDER_SPEED;
+    this.zoneVelZ = 0;
+    this.zoneDirTimer = 0;
+    this.currentZoneRadius = this.ZONE_RADIUS;
+    this.zoneRadiusTarget = this.ZONE_RADIUS;
+    this.zoneResizeTimer = 0;
+    this.earthquakeTimer = 0;
+    this.p1AtBoundary = false;
+    this.p2AtBoundary = false;
 
     this.setupCamera();
     this.addLighting(0xffe0a0);
@@ -142,7 +168,9 @@ export class SumoMode extends GameMode {
       this.p2Body.velocity.y = 0;
     }
 
-    // Enforce arena bounds
+    // Enforce arena bounds & score on boundary touch
+    this.checkBoundaryScoring(this.p1Body, this.p2Body, 'p2');
+    this.checkBoundaryScoring(this.p2Body, this.p1Body, 'p1');
     this.enforceArenaBounds(this.p1Body);
     this.enforceArenaBounds(this.p2Body);
 
@@ -155,17 +183,58 @@ export class SumoMode extends GameMode {
     this.rotateToVelocity(this.p1Mesh, this.p1Body);
     this.rotateToVelocity(this.p2Mesh, this.p2Body);
 
-    // Move scoring zone (constrained to shrinking arena)
-    const maxOrbitRadius = Math.max(0, this.currentArenaRadius - this.ZONE_RADIUS - 0.5);
-    const currentOrbitRadius = Math.min(this.ZONE_ORBIT_RADIUS, maxOrbitRadius);
-    this.zoneX =
-      this.arenaCenterX +
-      Math.cos(this.elapsed * this.ZONE_ORBIT_SPEED) * currentOrbitRadius;
-    this.zoneZ =
-      this.arenaCenterZ +
-      Math.sin(this.elapsed * this.ZONE_ORBIT_SPEED) * currentOrbitRadius;
+    // Earthquake effect: periodically push both players in random directions
+    this.earthquakeTimer += delta;
+    if (this.earthquakeTimer >= this.EARTHQUAKE_INTERVAL) {
+      this.earthquakeTimer = 0;
+      this.applyEarthquake();
+    }
+
+    // Dynamic zone direction change
+    this.zoneDirTimer += delta;
+    if (this.zoneDirTimer >= this.ZONE_DIR_CHANGE_INTERVAL) {
+      this.zoneDirTimer = 0;
+      const angle = Math.random() * Math.PI * 2;
+      this.zoneVelX = Math.cos(angle) * this.ZONE_WANDER_SPEED;
+      this.zoneVelZ = Math.sin(angle) * this.ZONE_WANDER_SPEED;
+    }
+
+    // Dynamic zone radius change
+    this.zoneResizeTimer += delta;
+    if (this.zoneResizeTimer >= this.ZONE_RESIZE_INTERVAL) {
+      this.zoneResizeTimer = 0;
+      this.zoneRadiusTarget =
+        this.ZONE_RADIUS_MIN +
+        Math.random() * (this.ZONE_RADIUS_MAX - this.ZONE_RADIUS_MIN);
+    }
+    this.currentZoneRadius += (this.zoneRadiusTarget - this.currentZoneRadius) * delta * 2;
+
+    // Move zone position with wandering velocity (constrained to shrinking arena)
+    this.zoneX += this.zoneVelX * delta;
+    this.zoneZ += this.zoneVelZ * delta;
+    const maxOrbitRadius = Math.max(0, this.currentArenaRadius - this.currentZoneRadius - 0.5);
+    const zoneDist = Math.sqrt(
+      (this.zoneX - this.arenaCenterX) ** 2 + (this.zoneZ - this.arenaCenterZ) ** 2
+    );
+    if (zoneDist > maxOrbitRadius && zoneDist > 0.01) {
+      const nx = (this.zoneX - this.arenaCenterX) / zoneDist;
+      const nz = (this.zoneZ - this.arenaCenterZ) / zoneDist;
+      this.zoneX = this.arenaCenterX + nx * maxOrbitRadius;
+      this.zoneZ = this.arenaCenterZ + nz * maxOrbitRadius;
+      // Reflect velocity away from boundary
+      const dot = this.zoneVelX * nx + this.zoneVelZ * nz;
+      if (dot > 0) {
+        this.zoneVelX -= 2 * dot * nx;
+        this.zoneVelZ -= 2 * dot * nz;
+      }
+    }
     this.zoneMesh.position.set(this.zoneX, 0.02, this.zoneZ);
     this.zoneGlowMesh.position.set(this.zoneX, 0.03, this.zoneZ);
+
+    // Update zone visual scale based on dynamic radius
+    const zoneScale = this.currentZoneRadius / this.ZONE_RADIUS;
+    this.zoneMesh.scale.set(zoneScale, zoneScale, 1);
+    this.zoneGlowMesh.scale.set(zoneScale, zoneScale, 1);
 
     // Pulse the zone glow
     const pulse = 0.6 + 0.4 * Math.sin(this.elapsed * 3);
@@ -617,7 +686,7 @@ export class SumoMode extends GameMode {
   }
 
   private updateScoring(delta: number): void {
-    const zoneRadiusSq = this.ZONE_RADIUS * this.ZONE_RADIUS;
+    const zoneRadiusSq = this.currentZoneRadius * this.currentZoneRadius;
     const pointsPerSecond = 2;
 
     // Player 1 zone check
@@ -668,6 +737,53 @@ export class SumoMode extends GameMode {
         );
       }
     }
+  }
+
+  private checkBoundaryScoring(
+    pushedBody: CANNON.Body,
+    _pusherBody: CANNON.Body,
+    scoringPlayer: 'p1' | 'p2'
+  ): void {
+    const dx = pushedBody.position.x - this.arenaCenterX;
+    const dz = pushedBody.position.z - this.arenaCenterZ;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const boundaryThreshold = this.currentArenaRadius - 1.0;
+    const atBoundary = dist >= boundaryThreshold;
+
+    // Determine which player is being pushed (the one NOT scoring)
+    const wasTouching = scoringPlayer === 'p1' ? this.p2AtBoundary : this.p1AtBoundary;
+
+    if (atBoundary && !wasTouching) {
+      if (scoringPlayer === 'p1') {
+        this.scoreP1 += this.BOUNDARY_SCORE_POINTS;
+      } else {
+        this.scoreP2 += this.BOUNDARY_SCORE_POINTS;
+      }
+    }
+
+    // Update tracking state for the pushed player
+    if (scoringPlayer === 'p1') {
+      this.p2AtBoundary = atBoundary;
+    } else {
+      this.p1AtBoundary = atBoundary;
+    }
+  }
+
+  private applyEarthquake(): void {
+    const angle1 = Math.random() * Math.PI * 2;
+    const angle2 = Math.random() * Math.PI * 2;
+    const impulse1 = new CANNON.Vec3(
+      Math.cos(angle1) * this.EARTHQUAKE_FORCE,
+      0,
+      Math.sin(angle1) * this.EARTHQUAKE_FORCE
+    );
+    const impulse2 = new CANNON.Vec3(
+      Math.cos(angle2) * this.EARTHQUAKE_FORCE,
+      0,
+      Math.sin(angle2) * this.EARTHQUAKE_FORCE
+    );
+    this.p1Body.applyImpulse(impulse1);
+    this.p2Body.applyImpulse(impulse2);
   }
 
   private updateArenaShrink(delta: number): void {

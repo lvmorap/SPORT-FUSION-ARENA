@@ -66,7 +66,7 @@ export class SumoMode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) return;
+    if (!this.isActive) {return;}
 
     this.elapsed += delta;
 
@@ -285,8 +285,8 @@ export class SumoMode extends GameMode {
     player: 'p1' | 'p2'
   ): void {
     const cooldown = player === 'p1' ? this.p1DashCooldown : this.p2DashCooldown;
-    if (cooldown > 0) return;
-    if (!this.engine.input.isDown(actionKey)) return;
+    if (cooldown > 0) {return;}
+    if (!this.engine.input.isDown(actionKey)) {return;}
 
     const impulse = new CANNON.Vec3(
       dir.x * this.DASH_FORCE,

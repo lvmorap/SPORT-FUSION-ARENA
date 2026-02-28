@@ -55,7 +55,7 @@ export class PingPongMode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) return;
+    if (!this.isActive) {return;}
 
     this.updatePaddles(delta);
     this.updateBall(delta);

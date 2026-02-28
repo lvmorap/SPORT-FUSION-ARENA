@@ -39,7 +39,7 @@ export abstract class GameMode {
     this.isActive = false;
   }
 
-  protected addLighting(color: number = 0xffffff): void {
+  protected addLighting(color = 0xffffff): void {
     const ambient = new THREE.AmbientLight(0xffffff, 0.4);
     this.engine.scene.add(ambient);
 
@@ -126,7 +126,7 @@ export abstract class GameMode {
     return body;
   }
 
-  protected createBallBody(radius: number, x: number, y: number, z: number, mass: number = 1): CANNON.Body {
+  protected createBallBody(radius: number, x: number, y: number, z: number, mass = 1): CANNON.Body {
     return new CANNON.Body({
       mass,
       shape: new CANNON.Sphere(radius),

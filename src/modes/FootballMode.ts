@@ -63,7 +63,7 @@ export class FootballMode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) return;
+    if (!this.isActive) {return;}
 
     this.goalTime += delta;
 
@@ -363,7 +363,7 @@ export class FootballMode extends GameMode {
   // --- Goal detection ---
 
   private checkGoals(goalZ: number): void {
-    if (this.goalCooldown) return;
+    if (this.goalCooldown) {return;}
 
     const bx = this.ballBody.position.x;
     const bz = this.ballBody.position.z;

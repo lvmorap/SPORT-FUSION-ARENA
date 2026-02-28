@@ -223,7 +223,8 @@ function goToFinal(): void {
 function gameLoop(): void {
   requestAnimationFrame(gameLoop);
 
-  const delta = Math.min(engine.clock.getDelta(), 0.05);
+  engine.timer.update();
+  const delta = Math.min(engine.timer.getDelta(), 0.05);
 
   switch (state) {
     case 'menu':
@@ -285,5 +286,4 @@ function gameLoop(): void {
 
 // --- Start ---
 goToMenu();
-engine.clock.start();
 gameLoop();

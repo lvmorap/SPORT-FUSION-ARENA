@@ -8,7 +8,7 @@ export class Engine {
   public camera: THREE.PerspectiveCamera;
   public world: CANNON.World;
   public input: InputManager;
-  public clock: THREE.Clock;
+  public timer: THREE.Timer;
   public canvas: HTMLCanvasElement;
 
   private physicsObjects: Array<{ mesh: THREE.Object3D; body: CANNON.Body }> = [];
@@ -48,7 +48,7 @@ export class Engine {
     this.world.defaultContactMaterial.restitution = 0.5;
 
     this.input = new InputManager();
-    this.clock = new THREE.Clock();
+    this.timer = new THREE.Timer();
 
     window.addEventListener('resize', () => {
       this.onResize();

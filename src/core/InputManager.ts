@@ -1,6 +1,6 @@
 export class InputManager {
-  private keys: Map<string, boolean> = new Map();
-  private justPressed: Map<string, boolean> = new Map();
+  private keys = new Map<string, boolean>();
+  private justPressed = new Map<string, boolean>();
 
   public constructor() {
     window.addEventListener('keydown', (e: KeyboardEvent) => {

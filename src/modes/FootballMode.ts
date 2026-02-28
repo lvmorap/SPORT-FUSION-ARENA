@@ -417,7 +417,11 @@ export class FootballMode extends GameMode {
     if (dist < 1.5) {
       const nx = dx / dist;
       const nz = dz / dist;
-      this.ballBody.velocity.set(nx * this.KICK_FORCE, 0, nz * this.KICK_FORCE);
+      this.ballBody.velocity.set(0, 0, 0);
+      this.ballBody.applyImpulse(
+        new CANNON.Vec3(nx * this.KICK_FORCE, 0, nz * this.KICK_FORCE),
+        this.ballBody.position,
+      );
     }
   }
 

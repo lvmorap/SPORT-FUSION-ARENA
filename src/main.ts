@@ -186,7 +186,12 @@ function goToPlaying(): void {
   const config = getConfigByName(gameData.modes[gameData.currentModeIndex]);
   modeTimer = config.duration;
 
-  overlay.showHUD(config.displayName);
+  const isF1 = gameData.modes[gameData.currentModeIndex] === 'f1';
+  if (isF1) {
+    overlay.showF1HUD(config.displayName);
+  } else {
+    overlay.showHUD(config.displayName);
+  }
 
   if (currentMode) {
     currentMode.start();
@@ -286,12 +291,20 @@ function gameLoop(): void {
         // Update HUD
         const p1 = Math.round(currentMode.getScoreP1());
         const p2 = Math.round(currentMode.getScoreP2());
-        overlay.updateScore(p1, p2);
+
+        const isF1Mode = gameData.modes[gameData.currentModeIndex] === 'f1';
+        if (isF1Mode) {
+          const f1 = currentMode as F1Mode;
+          overlay.updateF1Laps(f1.getLapsP1(), f1.getLapsP2(), 3);
+          overlay.updateF1Powers(f1.getP1PowerInfo(), f1.getP2PowerInfo());
+        } else {
+          overlay.updateScore(p1, p2);
+        }
 
         modeTimer -= delta;
         overlay.updateTimer(modeTimer);
 
-        if (modeTimer <= 0) {
+        if (modeTimer <= 0 || currentMode.isFinished()) {
           goToResult();
         }
       }

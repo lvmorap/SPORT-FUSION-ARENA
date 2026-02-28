@@ -95,6 +95,50 @@ export class Overlay {
     }
   }
 
+  public showF1HUD(modeName: string): void {
+    this.container.innerHTML = `
+      <div class="hud">
+        <div class="hud-left">
+          <div class="hud-label">JUGADOR 1</div>
+          <div class="hud-score p1" id="score-p1">Vuelta 0/3</div>
+          <div class="f1-power p1" id="power-p1"></div>
+        </div>
+        <div class="hud-center">
+          <div class="hud-mode">${modeName}</div>
+          <div class="hud-timer" id="timer">120</div>
+        </div>
+        <div class="hud-right" style="text-align:right;">
+          <div class="hud-label">JUGADOR 2</div>
+          <div class="hud-score p2" id="score-p2">Vuelta 0/3</div>
+          <div class="f1-power p2" id="power-p2"></div>
+        </div>
+      </div>
+      <div class="tournament-bar" id="tournament-bar"></div>
+    `;
+  }
+
+  public updateF1Laps(p1Laps: number, p2Laps: number, maxLaps: number): void {
+    const s1 = document.getElementById('score-p1');
+    const s2 = document.getElementById('score-p2');
+    if (s1) {
+      s1.textContent = `Vuelta ${p1Laps}/${maxLaps}`;
+    }
+    if (s2) {
+      s2.textContent = `Vuelta ${p2Laps}/${maxLaps}`;
+    }
+  }
+
+  public updateF1Powers(p1Power: string, p2Power: string): void {
+    const pw1 = document.getElementById('power-p1');
+    const pw2 = document.getElementById('power-p2');
+    if (pw1) {
+      pw1.textContent = p1Power;
+    }
+    if (pw2) {
+      pw2.textContent = p2Power;
+    }
+  }
+
   public showResult(
     winner: WinnerType,
     scoreP1: number,

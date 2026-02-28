@@ -1,110 +1,121 @@
 import { describe, it, expect } from 'vitest';
 
-// Test F1 checkpoint logic (extracted from F1Mode)
-const CHECKPOINT_COUNT = 4;
-const CHECKPOINT_ANGLES: number[] = [];
-for (let i = 0; i < CHECKPOINT_COUNT; i++) {
-  CHECKPOINT_ANGLES.push((i * Math.PI * 2) / CHECKPOINT_COUNT);
-}
-const CHECKPOINT_RADIUS = 2.5;
-const TRACK_CENTER_RADIUS = 15;
+// Test F1 checkpoint logic (mirrors F1Mode's checkCheckpoints)
+// Checkpoint 0 is at the finish line. Cars start with nextCheckpoint=1.
+// After passing all intermediate checkpoints (1..N-1), nextCheckpoint wraps
+// to 0 (the finish line). Crossing checkpoint 0 increments laps.
+const CHECKPOINT_COUNT = 8;
+const CHECKPOINT_RADIUS = 3.8;
 
 interface CarState {
   x: number;
   z: number;
-  angle: number;
-  speed: number;
+  laps: number;
   nextCheckpoint: number;
-  penaltyTimer: number;
-  onTrack: boolean;
+}
+
+interface Checkpoint {
+  x: number;
+  z: number;
+}
+
+// Simple evenly-spaced checkpoints for testing
+function createCheckpoints(): Checkpoint[] {
+  const cps: Checkpoint[] = [];
+  for (let i = 0; i < CHECKPOINT_COUNT; i++) {
+    const angle = (i / CHECKPOINT_COUNT) * Math.PI * 2;
+    cps.push({ x: Math.cos(angle) * 20, z: Math.sin(angle) * 20 });
+  }
+  return cps;
 }
 
 function defaultCarState(): CarState {
-  return {
-    x: TRACK_CENTER_RADIUS,
-    z: 0,
-    angle: Math.PI / 2,
-    speed: 0,
-    nextCheckpoint: 1,
-    penaltyTimer: 0,
-    onTrack: true,
-  };
+  return { x: 0, z: 0, laps: 0, nextCheckpoint: 1 };
 }
 
-function checkCheckpoints(state: CarState): number {
-  let lapsCompleted = 0;
-  const cpAngle = CHECKPOINT_ANGLES[state.nextCheckpoint];
-  const cpX = Math.cos(cpAngle) * TRACK_CENTER_RADIUS;
-  const cpZ = Math.sin(cpAngle) * TRACK_CENTER_RADIUS;
-  const dx = state.x - cpX;
-  const dz = state.z - cpZ;
+function checkCheckpoints(state: CarState, checkpoints: Checkpoint[]): void {
+  const cp = checkpoints[state.nextCheckpoint];
+  const dx = state.x - cp.x;
+  const dz = state.z - cp.z;
   const distSq = dx * dx + dz * dz;
 
   if (distSq < CHECKPOINT_RADIUS * CHECKPOINT_RADIUS) {
-    state.nextCheckpoint++;
-    if (state.nextCheckpoint >= CHECKPOINT_COUNT) {
-      state.nextCheckpoint = 0;
-      lapsCompleted = 1;
+    if (state.nextCheckpoint === 0) {
+      state.laps++;
+      state.nextCheckpoint = 1;
+    } else {
+      state.nextCheckpoint = (state.nextCheckpoint + 1) % CHECKPOINT_COUNT;
     }
   }
-  return lapsCompleted;
 }
 
 describe('F1 checkpoint logic', () => {
-  it('cars should start at nextCheckpoint 1 (not 0) to avoid auto-trigger', () => {
+  const checkpoints = createCheckpoints();
+
+  it('cars should start at nextCheckpoint 1 (not 0) to avoid auto-trigger at finish line', () => {
     const car = defaultCarState();
     expect(car.nextCheckpoint).toBe(1);
   });
 
-  it('car at start position should NOT auto-trigger any checkpoint', () => {
+  it('car at finish line (checkpoint 0) should NOT trigger because nextCheckpoint is 1', () => {
     const car = defaultCarState();
-    // Car starts at (TRACK_CENTER_RADIUS, 0) which is where checkpoint 0 is
-    // Since nextCheckpoint is 1, checkpoint 0 should not be checked
-    const laps = checkCheckpoints(car);
-    expect(laps).toBe(0);
+    // Move car to checkpoint 0 position
+    car.x = checkpoints[0].x;
+    car.z = checkpoints[0].z;
+    checkCheckpoints(car, checkpoints);
+    expect(car.laps).toBe(0);
     expect(car.nextCheckpoint).toBe(1); // unchanged
   });
 
   it('should trigger checkpoint when car is close enough', () => {
     const car = defaultCarState();
-    // Move car near checkpoint 1 (at PI/2 = top of circle)
-    const cpAngle = CHECKPOINT_ANGLES[1]; // PI/2
-    car.x = Math.cos(cpAngle) * TRACK_CENTER_RADIUS;
-    car.z = Math.sin(cpAngle) * TRACK_CENTER_RADIUS;
-
-    const laps = checkCheckpoints(car);
-    expect(laps).toBe(0);
+    // Move car to checkpoint 1 position
+    car.x = checkpoints[1].x;
+    car.z = checkpoints[1].z;
+    checkCheckpoints(car, checkpoints);
+    expect(car.laps).toBe(0);
     expect(car.nextCheckpoint).toBe(2);
   });
 
-  it('should complete a lap when passing all checkpoints', () => {
+  it('should complete a lap when crossing finish line after all intermediate checkpoints', () => {
     const car = defaultCarState();
 
-    // Pass checkpoints 1, 2, 3
+    // Pass intermediate checkpoints 1..7
     for (let cp = 1; cp < CHECKPOINT_COUNT; cp++) {
-      const cpAngle = CHECKPOINT_ANGLES[cp];
-      car.x = Math.cos(cpAngle) * TRACK_CENTER_RADIUS;
-      car.z = Math.sin(cpAngle) * TRACK_CENTER_RADIUS;
-      const laps = checkCheckpoints(car);
-      if (cp < CHECKPOINT_COUNT - 1) {
-        expect(laps).toBe(0);
-      } else {
-        expect(laps).toBe(1); // last checkpoint completes the lap
-        expect(car.nextCheckpoint).toBe(0); // wraps to 0
-      }
+      car.x = checkpoints[cp].x;
+      car.z = checkpoints[cp].z;
+      checkCheckpoints(car, checkpoints);
     }
+    // After passing checkpoint 7, nextCheckpoint should wrap to 0 (finish line)
+    expect(car.nextCheckpoint).toBe(0);
+    expect(car.laps).toBe(0);
+
+    // Now cross the finish line (checkpoint 0)
+    car.x = checkpoints[0].x;
+    car.z = checkpoints[0].z;
+    checkCheckpoints(car, checkpoints);
+    expect(car.laps).toBe(1);
+    expect(car.nextCheckpoint).toBe(1); // ready for next lap
   });
 
   it('should not allow skipping checkpoints', () => {
     const car = defaultCarState();
-    // Car at checkpoint 3 but nextCheckpoint is 1
-    const cp3Angle = CHECKPOINT_ANGLES[3];
-    car.x = Math.cos(cp3Angle) * TRACK_CENTER_RADIUS;
-    car.z = Math.sin(cp3Angle) * TRACK_CENTER_RADIUS;
-
-    const laps = checkCheckpoints(car);
-    expect(laps).toBe(0);
+    // Car at checkpoint 5 but nextCheckpoint is 1
+    car.x = checkpoints[5].x;
+    car.z = checkpoints[5].z;
+    checkCheckpoints(car, checkpoints);
+    expect(car.laps).toBe(0);
     expect(car.nextCheckpoint).toBe(1); // didn't advance
+  });
+
+  it('should not count a lap if finish line crossed without intermediate checkpoints', () => {
+    const car = defaultCarState();
+    // Skip straight to checkpoint 0 without passing 1..7
+    car.x = checkpoints[0].x;
+    car.z = checkpoints[0].z;
+    checkCheckpoints(car, checkpoints);
+    expect(car.laps).toBe(0);
+    expect(car.nextCheckpoint).toBe(1); // still looking for checkpoint 1
   });
 });
 

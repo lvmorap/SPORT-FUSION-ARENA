@@ -52,7 +52,8 @@ export const MODE_CONFIGS: ModeConfig[] = [
     name: 'sumo',
     displayName: 'SUMO ARENA',
     icon: '🥊',
-    description: 'Empuja a tu rival fuera de la zona. ¡La zona se mueve constantemente!',
+    description:
+      'Empuja a tu rival fuera de la zona. ¡La arena se achica! Dash (F/Shift) y Salto (G/Enter)',
     duration: 60,
     bgColor: 0x3a2010,
   },
@@ -76,8 +77,9 @@ export const MODE_CONFIGS: ModeConfig[] = [
     name: 'f1',
     displayName: 'FORMULA 3D',
     icon: '🏎️',
-    description: 'Carrera en circuito 3D. ¡Salirte de la pista penaliza 3 segundos!',
-    duration: 60,
+    description:
+      '¡Carrera por vueltas con poderes! 3 vueltas para ganar. ¡Cuidado con los obstáculos!',
+    duration: 120,
     bgColor: 0x1a1a2a,
   },
 ];

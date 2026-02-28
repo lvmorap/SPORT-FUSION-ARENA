@@ -43,12 +43,12 @@ export class SumoMode extends GameMode {
 
   private readonly ARENA_RADIUS = 12;
   private readonly ZONE_RADIUS = 4;
-  private readonly PLAYER_SPEED = 65;
-  private readonly DASH_FORCE = 280;
+  private readonly PLAYER_SPEED = 10;
+  private readonly DASH_FORCE = 25;
   private readonly DASH_COOLDOWN = 1.5;
   private readonly ZONE_ORBIT_RADIUS = 5;
   private readonly ZONE_ORBIT_SPEED = 0.4;
-  private readonly PUSH_RADIUS = 2.0;
+  private readonly PUSH_RADIUS = 2.2;
   private readonly PUSH_FORCE = 150;
 
   public setup(): void {
@@ -79,17 +79,13 @@ export class SumoMode extends GameMode {
 
     this.elapsed += delta;
 
-    // Player movement with dynamic forces
-    this.handlePlayerMovement(this.p1Body, P1_CONTROLS, this.PLAYER_SPEED);
-    this.handlePlayerMovement(this.p2Body, P2_CONTROLS, this.PLAYER_SPEED);
+    // Direct velocity-based movement (responsive XZ-plane controls)
+    this.handleSumoMovement(this.p1Body, P1_CONTROLS);
+    this.handleSumoMovement(this.p2Body, P2_CONTROLS);
 
     // Track facing directions from velocity
     this.updateFacingDirection(this.p1Body, this.p1LastDir);
     this.updateFacingDirection(this.p2Body, this.p2LastDir);
-
-    // Rotate player meshes to face movement direction
-    this.rotateToVelocity(this.p1Mesh, this.p1Body);
-    this.rotateToVelocity(this.p2Mesh, this.p2Body);
 
     // Dash / push mechanic
     this.p1DashCooldown = Math.max(0, this.p1DashCooldown - delta);
@@ -100,14 +96,20 @@ export class SumoMode extends GameMode {
     // Collision-based push between players
     this.handlePlayerCollisionPush();
 
-    // Keep players on ground
-    this.p1Body.position.y = 0.6;
-    this.p2Body.position.y = 0.6;
+    // Keep players on ground plane
+    this.p1Body.position.y = 0.8;
+    this.p2Body.position.y = 0.8;
     this.p1Body.velocity.y = 0;
     this.p2Body.velocity.y = 0;
 
-    // Sync physics
+    // Sync physics (copies body position/quaternion to mesh)
     this.engine.syncPhysics();
+
+    // Override mesh rotation after syncPhysics to prevent physics quaternion artifacts
+    this.p1Mesh.quaternion.set(0, 0, 0, 1);
+    this.p2Mesh.quaternion.set(0, 0, 0, 1);
+    this.rotateToVelocity(this.p1Mesh, this.p1Body);
+    this.rotateToVelocity(this.p2Mesh, this.p2Body);
 
     // Move scoring zone
     this.zoneX = Math.cos(this.elapsed * this.ZONE_ORBIT_SPEED) * this.ZONE_ORBIT_RADIUS;
@@ -294,13 +296,152 @@ export class SumoMode extends GameMode {
   }
 
   private createPlayers(): void {
-    this.p1Mesh = this.createPlayerMesh(COLORS.P1);
-    this.p1Body = this.createPlayerBody(0, -4);
+    this.p1Mesh = this.createSumoMesh(COLORS.P1);
+    this.p1Body = this.createSumoBody(0, -4);
     this.engine.addPhysicsObject(this.p1Mesh, this.p1Body);
 
-    this.p2Mesh = this.createPlayerMesh(COLORS.P2);
-    this.p2Body = this.createPlayerBody(0, 4);
+    this.p2Mesh = this.createSumoMesh(COLORS.P2);
+    this.p2Body = this.createSumoBody(0, 4);
     this.engine.addPhysicsObject(this.p2Mesh, this.p2Body);
+  }
+
+  private createSumoMesh(color: number): THREE.Group {
+    const group = new THREE.Group();
+
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: 0xffdbac,
+      roughness: 0.6,
+    });
+    const mawashiMat = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.4,
+      metalness: 0.1,
+      emissive: color,
+      emissiveIntensity: 0.2,
+    });
+    const hairMat = new THREE.MeshStandardMaterial({
+      color: 0x111111,
+      roughness: 0.3,
+    });
+
+    // Big round belly (main sumo body shape)
+    const bellyGeo = new THREE.SphereGeometry(0.75, 24, 24);
+    const belly = new THREE.Mesh(bellyGeo, skinMat);
+    belly.position.y = 0.85;
+    belly.scale.set(1.0, 0.85, 0.9);
+    belly.castShadow = true;
+    group.add(belly);
+
+    // Chest (upper body, slightly smaller)
+    const chestGeo = new THREE.SphereGeometry(0.55, 20, 20);
+    const chest = new THREE.Mesh(chestGeo, skinMat);
+    chest.position.y = 1.25;
+    chest.scale.set(0.95, 0.7, 0.8);
+    chest.castShadow = true;
+    group.add(chest);
+
+    // Head
+    const headGeo = new THREE.SphereGeometry(0.28, 16, 16);
+    const head = new THREE.Mesh(headGeo, skinMat);
+    head.position.y = 1.65;
+    head.castShadow = true;
+    group.add(head);
+
+    // Hair bun (chonmage topknot)
+    const bunGeo = new THREE.SphereGeometry(0.13, 12, 12);
+    const bun = new THREE.Mesh(bunGeo, hairMat);
+    bun.position.set(0, 1.88, -0.05);
+    bun.castShadow = true;
+    group.add(bun);
+
+    // Mawashi (sumo belt) - torus around the waist
+    const mawashiGeo = new THREE.TorusGeometry(0.72, 0.1, 12, 24);
+    const mawashi = new THREE.Mesh(mawashiGeo, mawashiMat);
+    mawashi.position.y = 0.6;
+    mawashi.rotation.x = Math.PI / 2;
+    mawashi.castShadow = true;
+    group.add(mawashi);
+
+    // Front flap of mawashi
+    const flapGeo = new THREE.BoxGeometry(0.25, 0.3, 0.08);
+    const flap = new THREE.Mesh(flapGeo, mawashiMat);
+    flap.position.set(0, 0.5, 0.7);
+    group.add(flap);
+
+    // Thick arms in pushing pose
+    const armGeo = new THREE.CapsuleGeometry(0.13, 0.4, 8, 12);
+    const leftArm = new THREE.Mesh(armGeo, skinMat);
+    leftArm.position.set(-0.85, 1.0, 0.15);
+    leftArm.rotation.z = Math.PI / 4;
+    leftArm.rotation.x = -0.2;
+    leftArm.castShadow = true;
+    group.add(leftArm);
+
+    const rightArm = new THREE.Mesh(armGeo, skinMat);
+    rightArm.position.set(0.85, 1.0, 0.15);
+    rightArm.rotation.z = -Math.PI / 4;
+    rightArm.rotation.x = -0.2;
+    rightArm.castShadow = true;
+    group.add(rightArm);
+
+    // Hands
+    const handGeo = new THREE.SphereGeometry(0.1, 8, 8);
+    const leftHand = new THREE.Mesh(handGeo, skinMat);
+    leftHand.position.set(-1.05, 0.75, 0.25);
+    group.add(leftHand);
+    const rightHand = new THREE.Mesh(handGeo, skinMat);
+    rightHand.position.set(1.05, 0.75, 0.25);
+    group.add(rightHand);
+
+    // Thick legs
+    const legGeo = new THREE.CapsuleGeometry(0.16, 0.3, 8, 12);
+    const leftLeg = new THREE.Mesh(legGeo, skinMat);
+    leftLeg.position.set(-0.3, 0.25, 0);
+    leftLeg.castShadow = true;
+    group.add(leftLeg);
+    const rightLeg = new THREE.Mesh(legGeo, skinMat);
+    rightLeg.position.set(0.3, 0.25, 0);
+    rightLeg.castShadow = true;
+    group.add(rightLeg);
+
+    // Feet
+    const footGeo = new THREE.BoxGeometry(0.2, 0.08, 0.28);
+    const footMat = new THREE.MeshStandardMaterial({
+      color: 0xffdbac,
+      roughness: 0.7,
+    });
+    const leftFoot = new THREE.Mesh(footGeo, footMat);
+    leftFoot.position.set(-0.3, 0.04, 0.05);
+    group.add(leftFoot);
+    const rightFoot = new THREE.Mesh(footGeo, footMat);
+    rightFoot.position.set(0.3, 0.04, 0.05);
+    group.add(rightFoot);
+
+    // Glow ring at feet (team indicator)
+    const ringGeo = new THREE.TorusGeometry(0.65, 0.05, 8, 32);
+    const ringMat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.8,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.y = 0.02;
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+
+    return group;
+  }
+
+  private createSumoBody(x: number, z: number): CANNON.Body {
+    const body = new CANNON.Body({
+      mass: 8,
+      shape: new CANNON.Sphere(0.8),
+      position: new CANNON.Vec3(x, 0.8, z),
+      linearDamping: 0.95,
+      angularDamping: 0.99,
+    });
+    body.fixedRotation = true;
+    return body;
   }
 
   private createGround(): void {
@@ -337,6 +478,39 @@ export class SumoMode extends GameMode {
     this.sceneObjects.push(this.particles);
   }
 
+  // --- Movement ---
+
+  private handleSumoMovement(
+    body: CANNON.Body,
+    controls: { up: string; down: string; left: string; right: string }
+  ): void {
+    const input = this.engine.input;
+    let dirX = 0;
+    let dirZ = 0;
+
+    if (input.isDown(controls.up)) {
+      dirZ -= 1;
+    }
+    if (input.isDown(controls.down)) {
+      dirZ += 1;
+    }
+    if (input.isDown(controls.left)) {
+      dirX -= 1;
+    }
+    if (input.isDown(controls.right)) {
+      dirX += 1;
+    }
+
+    const len = Math.sqrt(dirX * dirX + dirZ * dirZ);
+    if (len > 0) {
+      body.velocity.x = (dirX / len) * this.PLAYER_SPEED;
+      body.velocity.z = (dirZ / len) * this.PLAYER_SPEED;
+    } else {
+      body.velocity.x *= 0.8;
+      body.velocity.z *= 0.8;
+    }
+  }
+
   // --- Update helpers ---
 
   private updateFacingDirection(body: CANNON.Body, lastDir: CANNON.Vec3): void {
@@ -363,8 +537,8 @@ export class SumoMode extends GameMode {
       return;
     }
 
-    const impulse = new CANNON.Vec3(dir.x * this.DASH_FORCE, 0, dir.z * this.DASH_FORCE);
-    body.applyImpulse(impulse, body.position);
+    body.velocity.x += dir.x * this.DASH_FORCE;
+    body.velocity.z += dir.z * this.DASH_FORCE;
 
     if (player === 'p1') {
       this.p1DashCooldown = this.DASH_COOLDOWN;
@@ -374,22 +548,24 @@ export class SumoMode extends GameMode {
   }
 
   private updateScoring(delta: number): void {
-    const p1Dist = this.distToZone(this.p1Body);
-    const p2Dist = this.distToZone(this.p2Body);
+    const zoneRadiusSq = this.ZONE_RADIUS * this.ZONE_RADIUS;
+    const pointsPerSecond = 2;
 
-    if (p1Dist <= this.ZONE_RADIUS) {
-      this.scoreP1 += 2 * delta;
+    // Player 1 zone check
+    const p1dx = this.p1Body.position.x - this.zoneX;
+    const p1dz = this.p1Body.position.z - this.zoneZ;
+    const p1DistSq = p1dx * p1dx + p1dz * p1dz;
+    if (p1DistSq <= zoneRadiusSq) {
+      this.scoreP1 += pointsPerSecond * delta;
     }
 
-    if (p2Dist <= this.ZONE_RADIUS) {
-      this.scoreP2 += 2 * delta;
+    // Player 2 zone check
+    const p2dx = this.p2Body.position.x - this.zoneX;
+    const p2dz = this.p2Body.position.z - this.zoneZ;
+    const p2DistSq = p2dx * p2dx + p2dz * p2dz;
+    if (p2DistSq <= zoneRadiusSq) {
+      this.scoreP2 += pointsPerSecond * delta;
     }
-  }
-
-  private distToZone(body: CANNON.Body): number {
-    const dx = body.position.x - this.zoneX;
-    const dz = body.position.z - this.zoneZ;
-    return Math.sqrt(dx * dx + dz * dz);
   }
 
   private rotateToVelocity(mesh: THREE.Group, body: CANNON.Body): void {
@@ -408,7 +584,6 @@ export class SumoMode extends GameMode {
     if (dist < this.PUSH_RADIUS && dist > 0.01) {
       const nx = dx / dist;
       const nz = dz / dist;
-      // Relative velocity along collision normal
       const relVx = this.p1Body.velocity.x - this.p2Body.velocity.x;
       const relVz = this.p1Body.velocity.z - this.p2Body.velocity.z;
       const relDot = relVx * nx + relVz * nz;
@@ -428,17 +603,14 @@ export class SumoMode extends GameMode {
   }
 
   private animateEdgeBoundary(): void {
-    // Pulse the edge glow
     const edgePulse = 0.5 + 0.5 * Math.sin(this.elapsed * 4);
     const edgeMat = this.edgeGlowMesh.material as THREE.MeshStandardMaterial;
     edgeMat.emissiveIntensity = 1.0 + edgePulse * 1.5;
     edgeMat.opacity = 0.5 + 0.3 * edgePulse;
 
-    // Pulse danger zone
     const dangerMat = this.dangerZoneMesh.material as THREE.MeshStandardMaterial;
     dangerMat.opacity = 0.15 + 0.15 * edgePulse;
 
-    // Animate posts height
     for (let i = 0; i < this.edgePosts.length; i++) {
       const post = this.edgePosts[i];
       const phase = (i / this.edgePosts.length) * Math.PI * 2;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Engine } from './core/Engine';
 import { Overlay } from './ui/Overlay';
 import { GameMode, FootballMode, SumoMode, PingPongMode, GolfMode, F1Mode } from './modes';
-import { GameData, GameState, MODE_CONFIGS, ModeName } from './types';
+import { GameData, GameState, MODE_CONFIGS, ModeConfig, ModeName } from './types';
 
 // --- State ---
 const engine = new Engine();
@@ -21,6 +21,23 @@ const gameData: GameData = {
   winsP1: 0,
   winsP2: 0,
 };
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function getConfigByName(name: ModeName): ModeConfig {
+  const config = MODE_CONFIGS.find((c) => c.name === name);
+  if (!config) {
+    throw new Error(`Config not found for mode: ${name}`);
+  }
+  return config;
+}
 
 // --- Menu background scene ---
 let menuObjects: THREE.Object3D[] = [];
@@ -122,6 +139,7 @@ function createMode(name: ModeName): GameMode {
 function goToMenu(): void {
   state = 'menu';
   gameData.currentModeIndex = 0;
+  gameData.modes = shuffleArray(['football', 'sumo', 'pingpong', 'golf', 'f1']);
   gameData.results = [];
   gameData.winsP1 = 0;
   gameData.winsP2 = 0;
@@ -138,7 +156,7 @@ function goToIntro(): void {
   clearMenuScene();
   engine.clearScene();
 
-  const config = MODE_CONFIGS[gameData.currentModeIndex];
+  const config = getConfigByName(gameData.modes[gameData.currentModeIndex]);
   engine.scene.background = new THREE.Color(config.bgColor);
   engine.scene.fog = new THREE.FogExp2(config.bgColor, 0.015);
 
@@ -160,7 +178,7 @@ function goToCountdown(): void {
 
 function goToPlaying(): void {
   state = 'playing';
-  const config = MODE_CONFIGS[gameData.currentModeIndex];
+  const config = getConfigByName(gameData.modes[gameData.currentModeIndex]);
   modeTimer = config.duration;
 
   overlay.showHUD(config.displayName);
@@ -176,7 +194,7 @@ function goToResult(): void {
   if (currentMode) {
     currentMode.stop();
 
-    const config = MODE_CONFIGS[gameData.currentModeIndex];
+    const config = getConfigByName(gameData.modes[gameData.currentModeIndex]);
     const winner = currentMode.getWinner();
     const scoreP1 = Math.round(currentMode.getScoreP1());
     const scoreP2 = Math.round(currentMode.getScoreP2());

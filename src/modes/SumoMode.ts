@@ -44,12 +44,24 @@ export class SumoMode extends GameMode {
   private readonly ARENA_RADIUS = 12;
   private readonly ZONE_RADIUS = 4;
   private readonly PLAYER_SPEED = 10;
-  private readonly DASH_FORCE = 25;
+  private readonly DASH_FORCE = 35;
   private readonly DASH_COOLDOWN = 1.5;
   private readonly ZONE_ORBIT_RADIUS = 5;
   private readonly ZONE_ORBIT_SPEED = 0.4;
   private readonly PUSH_RADIUS = 2.2;
   private readonly PUSH_FORCE = 150;
+  private readonly ARENA_MIN_RADIUS = 5;
+  private readonly JUMP_FORCE = 8;
+  private readonly JUMP_COOLDOWN = 2;
+  private readonly DASH_ENEMY_PUSH = 200;
+
+  private currentArenaRadius = 12;
+  private arenaCenterX = 0;
+  private arenaCenterZ = 0;
+  private p1JumpCooldown = 0;
+  private p2JumpCooldown = 0;
+  private p1IsJumping = false;
+  private p2IsJumping = false;
 
   public setup(): void {
     this.scoreP1 = 0;
@@ -59,6 +71,13 @@ export class SumoMode extends GameMode {
     this.p2DashCooldown = 0;
     this.p1LastDir = new CANNON.Vec3(0, 0, -1);
     this.p2LastDir = new CANNON.Vec3(0, 0, 1);
+    this.currentArenaRadius = this.ARENA_RADIUS;
+    this.arenaCenterX = 0;
+    this.arenaCenterZ = 0;
+    this.p1JumpCooldown = 0;
+    this.p2JumpCooldown = 0;
+    this.p1IsJumping = false;
+    this.p2IsJumping = false;
     this.sceneObjects = [];
     this.edgePosts = [];
 
@@ -79,6 +98,9 @@ export class SumoMode extends GameMode {
 
     this.elapsed += delta;
 
+    // Shrink arena over time
+    this.updateArenaShrink(delta);
+
     // Direct velocity-based movement (responsive XZ-plane controls)
     this.handleSumoMovement(this.p1Body, P1_CONTROLS);
     this.handleSumoMovement(this.p2Body, P2_CONTROLS);
@@ -93,14 +115,36 @@ export class SumoMode extends GameMode {
     this.handleDash(this.p1Body, this.p1LastDir, P1_CONTROLS.action1, 'p1');
     this.handleDash(this.p2Body, this.p2LastDir, P2_CONTROLS.action1, 'p2');
 
+    // Jump mechanic
+    this.p1JumpCooldown = Math.max(0, this.p1JumpCooldown - delta);
+    this.p2JumpCooldown = Math.max(0, this.p2JumpCooldown - delta);
+    this.handleJump(this.p1Body, P1_CONTROLS.action2, 'p1');
+    this.handleJump(this.p2Body, P2_CONTROLS.action2, 'p2');
+
     // Collision-based push between players
     this.handlePlayerCollisionPush();
 
-    // Keep players on ground plane
-    this.p1Body.position.y = 0.8;
-    this.p2Body.position.y = 0.8;
-    this.p1Body.velocity.y = 0;
-    this.p2Body.velocity.y = 0;
+    // Check if players landed from jump
+    if (this.p1IsJumping && this.p1Body.position.y <= 0.8) {
+      this.p1IsJumping = false;
+    }
+    if (this.p2IsJumping && this.p2Body.position.y <= 0.8) {
+      this.p2IsJumping = false;
+    }
+
+    // Keep players on ground plane (only when not jumping)
+    if (!this.p1IsJumping) {
+      this.p1Body.position.y = 0.8;
+      this.p1Body.velocity.y = 0;
+    }
+    if (!this.p2IsJumping) {
+      this.p2Body.position.y = 0.8;
+      this.p2Body.velocity.y = 0;
+    }
+
+    // Enforce arena bounds
+    this.enforceArenaBounds(this.p1Body);
+    this.enforceArenaBounds(this.p2Body);
 
     // Sync physics (copies body position/quaternion to mesh)
     this.engine.syncPhysics();
@@ -111,9 +155,15 @@ export class SumoMode extends GameMode {
     this.rotateToVelocity(this.p1Mesh, this.p1Body);
     this.rotateToVelocity(this.p2Mesh, this.p2Body);
 
-    // Move scoring zone
-    this.zoneX = Math.cos(this.elapsed * this.ZONE_ORBIT_SPEED) * this.ZONE_ORBIT_RADIUS;
-    this.zoneZ = Math.sin(this.elapsed * this.ZONE_ORBIT_SPEED) * this.ZONE_ORBIT_RADIUS;
+    // Move scoring zone (constrained to shrinking arena)
+    const maxOrbitRadius = Math.max(0, this.currentArenaRadius - this.ZONE_RADIUS - 0.5);
+    const currentOrbitRadius = Math.min(this.ZONE_ORBIT_RADIUS, maxOrbitRadius);
+    this.zoneX =
+      this.arenaCenterX +
+      Math.cos(this.elapsed * this.ZONE_ORBIT_SPEED) * currentOrbitRadius;
+    this.zoneZ =
+      this.arenaCenterZ +
+      Math.sin(this.elapsed * this.ZONE_ORBIT_SPEED) * currentOrbitRadius;
     this.zoneMesh.position.set(this.zoneX, 0.02, this.zoneZ);
     this.zoneGlowMesh.position.set(this.zoneX, 0.03, this.zoneZ);
 
@@ -441,6 +491,7 @@ export class SumoMode extends GameMode {
       angularDamping: 0.99,
     });
     body.fixedRotation = true;
+    body.updateMassProperties();
     return body;
   }
 
@@ -533,12 +584,30 @@ export class SumoMode extends GameMode {
     if (cooldown > 0) {
       return;
     }
-    if (!this.engine.input.isDown(actionKey)) {
+    if (!this.engine.input.wasPressed(actionKey)) {
       return;
     }
 
     body.velocity.x += dir.x * this.DASH_FORCE;
     body.velocity.z += dir.z * this.DASH_FORCE;
+
+    // Push enemy if nearby and in the dash direction
+    const enemy = player === 'p1' ? this.p2Body : this.p1Body;
+    const toEnemyX = enemy.position.x - body.position.x;
+    const toEnemyZ = enemy.position.z - body.position.z;
+    const distToEnemy = Math.sqrt(toEnemyX * toEnemyX + toEnemyZ * toEnemyZ);
+
+    if (distToEnemy < 4 && distToEnemy > 0.01) {
+      const dot = (toEnemyX * dir.x + toEnemyZ * dir.z) / distToEnemy;
+      if (dot > 0.3) {
+        const pushImpulse = new CANNON.Vec3(
+          (toEnemyX / distToEnemy) * this.DASH_ENEMY_PUSH,
+          0,
+          (toEnemyZ / distToEnemy) * this.DASH_ENEMY_PUSH
+        );
+        enemy.applyImpulse(pushImpulse); // Apply at center of mass (no torque)
+      }
+    }
 
     if (player === 'p1') {
       this.p1DashCooldown = this.DASH_COOLDOWN;
@@ -593,12 +662,121 @@ export class SumoMode extends GameMode {
           0,
           nz * this.PUSH_FORCE * relDot * 0.02
         );
-        this.p2Body.applyImpulse(pushImpulse, this.p2Body.position);
+        this.p2Body.applyImpulse(pushImpulse);
         this.p1Body.applyImpulse(
-          new CANNON.Vec3(-pushImpulse.x, 0, -pushImpulse.z),
-          this.p1Body.position
+          new CANNON.Vec3(-pushImpulse.x, 0, -pushImpulse.z)
         );
       }
+    }
+  }
+
+  private updateArenaShrink(delta: number): void {
+    // Linearly shrink arena from ARENA_RADIUS to ARENA_MIN_RADIUS over 60 seconds
+    const shrinkRate = (this.ARENA_RADIUS - this.ARENA_MIN_RADIUS) / 60;
+    this.currentArenaRadius = Math.max(
+      this.ARENA_MIN_RADIUS,
+      this.currentArenaRadius - shrinkRate * delta
+    );
+
+    // Asymmetric offset: shift center towards the losing player so their side shrinks less
+    let targetCX = 0;
+    let targetCZ = 0;
+
+    if (this.scoreP1 !== this.scoreP2) {
+      const losingBody = this.scoreP1 < this.scoreP2 ? this.p1Body : this.p2Body;
+      const loserDx = losingBody.position.x;
+      const loserDz = losingBody.position.z;
+      const loserDist = Math.sqrt(loserDx * loserDx + loserDz * loserDz);
+
+      if (loserDist > 0.1) {
+        const shrinkProgress = 1 - this.currentArenaRadius / this.ARENA_RADIUS;
+        const maxOffset = this.currentArenaRadius * 0.15;
+        const offset = shrinkProgress * maxOffset;
+        targetCX = (loserDx / loserDist) * offset;
+        targetCZ = (loserDz / loserDist) * offset;
+      }
+    }
+
+    // Smoothly interpolate arena center
+    this.arenaCenterX += (targetCX - this.arenaCenterX) * delta * 2;
+    this.arenaCenterZ += (targetCZ - this.arenaCenterZ) * delta * 2;
+
+    this.updateArenaVisuals();
+  }
+
+  private updateArenaVisuals(): void {
+    const scale = this.currentArenaRadius / this.ARENA_RADIUS;
+    const cx = this.arenaCenterX;
+    const cz = this.arenaCenterZ;
+
+    // Platform (CylinderGeometry: scale X and Z for horizontal radius)
+    this.platformMesh.scale.set(scale, 1, scale);
+    this.platformMesh.position.set(cx, 0.15, cz);
+
+    // Ring markers (RingGeometry rotated -PI/2: scale local X,Y for world XZ)
+    this.ringMarkerInner.scale.set(scale, scale, 1);
+    this.ringMarkerInner.position.set(cx, 0.31, cz);
+
+    this.ringMarkerOuter.scale.set(scale, scale, 1);
+    this.ringMarkerOuter.position.set(cx, 0.32, cz);
+
+    // Danger zone
+    this.dangerZoneMesh.scale.set(scale, scale, 1);
+    this.dangerZoneMesh.position.set(cx, 0.33, cz);
+
+    // Edge glow torus (rotated PI/2: local X,Y map to world X,Z)
+    this.edgeGlowMesh.scale.set(scale, scale, 1);
+    this.edgeGlowMesh.position.set(cx, 0.35, cz);
+
+    // Edge posts: reposition around the new arena boundary
+    const postCount = this.edgePosts.length;
+    for (let i = 0; i < postCount; i++) {
+      const angle = (i / postCount) * Math.PI * 2;
+      this.edgePosts[i].position.x = cx + Math.cos(angle) * this.currentArenaRadius;
+      this.edgePosts[i].position.z = cz + Math.sin(angle) * this.currentArenaRadius;
+    }
+  }
+
+  private enforceArenaBounds(body: CANNON.Body): void {
+    const dx = body.position.x - this.arenaCenterX;
+    const dz = body.position.z - this.arenaCenterZ;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const maxDist = this.currentArenaRadius - 0.8;
+
+    if (dist > maxDist && dist > 0.01) {
+      const nx = dx / dist;
+      const nz = dz / dist;
+      body.position.x = this.arenaCenterX + nx * maxDist;
+      body.position.z = this.arenaCenterZ + nz * maxDist;
+
+      // Cancel outward velocity component
+      const outwardDot = body.velocity.x * nx + body.velocity.z * nz;
+      if (outwardDot > 0) {
+        body.velocity.x -= nx * outwardDot;
+        body.velocity.z -= nz * outwardDot;
+      }
+    }
+  }
+
+  private handleJump(body: CANNON.Body, actionKey: string, player: 'p1' | 'p2'): void {
+    const cooldown = player === 'p1' ? this.p1JumpCooldown : this.p2JumpCooldown;
+    const isJumping = player === 'p1' ? this.p1IsJumping : this.p2IsJumping;
+
+    if (cooldown > 0 || isJumping) {
+      return;
+    }
+    if (!this.engine.input.wasPressed(actionKey)) {
+      return;
+    }
+
+    body.velocity.y = this.JUMP_FORCE;
+
+    if (player === 'p1') {
+      this.p1IsJumping = true;
+      this.p1JumpCooldown = this.JUMP_COOLDOWN;
+    } else {
+      this.p2IsJumping = true;
+      this.p2JumpCooldown = this.JUMP_COOLDOWN;
     }
   }
 

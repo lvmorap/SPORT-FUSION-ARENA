@@ -1,0 +1,43 @@
+/* SPORT FUSION ARENA - Global Styles */
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+:root {
+  --p1: #00e5ff;      /* cyan — jugador 1 */
+  --p2: #ff3d71;      /* coral — jugador 2 */
+  --score: #ffeb00;   /* amarillo — puntuación */
+  --danger: #ff2222;  /* rojo — peligro/penalización */
+  --success: #00ff88; /* verde — éxito/punto */
+  --text: #ffffff;
+  --dark: #050510;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--dark);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  overflow: hidden;
+}
+
+#game-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 2px solid #222;
+  border-radius: 4px;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+}

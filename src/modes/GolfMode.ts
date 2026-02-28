@@ -27,6 +27,10 @@ export class GolfMode extends GameMode {
   private obstacleBodies: CANNON.Body[] = [];
   private obstacleMeshes: THREE.Object3D[] = [];
 
+  // Shared physics materials
+  private readonly wallMaterial = new CANNON.Material({ restitution: 0.8 });
+  private readonly bumperMaterial = new CANNON.Material({ restitution: 1.0 });
+
   // Windmill
   private windmillBlades!: THREE.Group;
   private windmillBladeBodies: CANNON.Body[] = [];
@@ -178,10 +182,8 @@ export class GolfMode extends GameMode {
     pz: number,
     color: number
   ): void {
-    const wallMaterial = new CANNON.Material('wall');
-    wallMaterial.restitution = 0.8;
     const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
-    const body = new CANNON.Body({ mass: 0, shape, material: wallMaterial });
+    const body = new CANNON.Body({ mass: 0, shape, material: this.wallMaterial });
     body.position.set(px, py, pz);
     this.engine.world.addBody(body);
     this.wallBodies.push(body);
@@ -280,10 +282,8 @@ export class GolfMode extends GameMode {
     pz: number,
     color: number
   ): void {
-    const wallMaterial = new CANNON.Material('obstacle');
-    wallMaterial.restitution = 0.8;
     const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
-    const body = new CANNON.Body({ mass: 0, shape, material: wallMaterial });
+    const body = new CANNON.Body({ mass: 0, shape, material: this.wallMaterial });
     body.position.set(px, py, pz);
     this.engine.world.addBody(body);
     this.obstacleBodies.push(body);
@@ -304,10 +304,8 @@ export class GolfMode extends GameMode {
 
   private addBumper(x: number, z: number, radius: number, color: number): void {
     const height = 0.6;
-    const bumperMaterial = new CANNON.Material('bumper');
-    bumperMaterial.restitution = 1.0;
     const shape = new CANNON.Cylinder(radius, radius, height, 16);
-    const body = new CANNON.Body({ mass: 0, shape, material: bumperMaterial });
+    const body = new CANNON.Body({ mass: 0, shape, material: this.bumperMaterial });
     body.position.set(x, height / 2, z);
     this.engine.world.addBody(body);
     this.obstacleBodies.push(body);
@@ -612,8 +610,8 @@ export class GolfMode extends GameMode {
 
     if (dist < this.HOLE_RADIUS) {
       player.scored = true;
-      const strokeIndex = Math.min(player.strokes - 1, this.STROKE_SCORES.length - 1);
-      const points = this.STROKE_SCORES[Math.max(0, strokeIndex)];
+      const idx = Math.min(Math.max(player.strokes - 1, 0), this.STROKE_SCORES.length - 1);
+      const points = this.STROKE_SCORES[idx];
       if (playerId === 'P1') {
         this.scoreP1 += points;
       } else {

@@ -605,7 +605,7 @@ export class SumoMode extends GameMode {
           0,
           (toEnemyZ / distToEnemy) * this.DASH_ENEMY_PUSH
         );
-        enemy.applyImpulse(pushImpulse);
+        enemy.applyImpulse(pushImpulse); // Apply at center of mass (no torque)
       }
     }
 

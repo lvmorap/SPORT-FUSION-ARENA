@@ -57,6 +57,9 @@ export class FootballMode extends GameMode {
   private readonly FALL_GRAVITY_MULT = 3.0;
   private readonly PLAYER_HALF_H = 1.1;
   private readonly PLAYER_SCALE = 1.5;
+  private readonly MIN_KICK_DIST_EPSILON = 0.01;
+  private readonly WALL_BOUNCE_DAMPING = 0.85;
+  private readonly FLOOR_BOUNCE_DAMPING = 0.6;
 
   // ── Physics materials ──
   private matGround!: CANNON.Material;
@@ -597,7 +600,10 @@ export class FootballMode extends GameMode {
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
-    const ctx = canvas.getContext('2d')!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return new THREE.CanvasTexture(canvas);
+    }
 
     // White base
     ctx.fillStyle = '#ffffff';
@@ -719,7 +725,7 @@ export class FootballMode extends GameMode {
     const dz = this.ballBody.position.z - body.position.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (dist < 3.0) {
-      const inv = 1 / Math.max(dist, 0.01);
+      const inv = 1 / Math.max(dist, this.MIN_KICK_DIST_EPSILON);
       const nx = dx * inv;
       const ny = dy * inv;
       const nz = dz * inv;
@@ -792,12 +798,12 @@ export class FootballMode extends GameMode {
     const r = this.BALL_RADIUS;
     const b = this.ballBody;
 
-    if (b.position.x < -hw + r) { b.position.x = -hw + r; b.velocity.x = Math.abs(b.velocity.x) * 0.85; }
-    if (b.position.x > hw - r)  { b.position.x = hw - r;  b.velocity.x = -Math.abs(b.velocity.x) * 0.85; }
-    if (b.position.z < -hd + r) { b.position.z = -hd + r; b.velocity.z = Math.abs(b.velocity.z) * 0.85; }
-    if (b.position.z > hd - r)  { b.position.z = hd - r;  b.velocity.z = -Math.abs(b.velocity.z) * 0.85; }
+    if (b.position.x < -hw + r) { b.position.x = -hw + r; b.velocity.x = Math.abs(b.velocity.x) * this.WALL_BOUNCE_DAMPING; }
+    if (b.position.x > hw - r)  { b.position.x = hw - r;  b.velocity.x = -Math.abs(b.velocity.x) * this.WALL_BOUNCE_DAMPING; }
+    if (b.position.z < -hd + r) { b.position.z = -hd + r; b.velocity.z = Math.abs(b.velocity.z) * this.WALL_BOUNCE_DAMPING; }
+    if (b.position.z > hd - r)  { b.position.z = hd - r;  b.velocity.z = -Math.abs(b.velocity.z) * this.WALL_BOUNCE_DAMPING; }
     // Floor bounce is handled by physics, but add safety net
-    if (b.position.y < r) { b.position.y = r; if (b.velocity.y < 0) {b.velocity.y *= -0.6;} }
+    if (b.position.y < r) { b.position.y = r; if (b.velocity.y < 0) {b.velocity.y *= -this.FLOOR_BOUNCE_DAMPING;} }
   }
 
   /* ================================================================

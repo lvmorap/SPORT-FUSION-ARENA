@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <filter id="woodGrain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.2" numOctaves="6" seed="5" stitchTiles="stitch" result="noise"/>
+      <feColorMatrix type="matrix" in="noise" result="woodColor"
+        values="0 0 0 0 0.55
+                0 0 0 0 0.35
+                0 0 0 0 0.15
+                0 0 0 1 0"/>
+    </filter>
+    <filter id="woodRings" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="turbulence" baseFrequency="0.01 0.15" numOctaves="3" seed="18" stitchTiles="stitch" result="rings"/>
+      <feColorMatrix type="matrix" in="rings" result="ringColor"
+        values="0 0 0 0 0.3
+                0 0 0 0 0.18
+                0 0 0 0 0.06
+                0 0 0 0.35 0"/>
+    </filter>
+    <filter id="woodFine" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.08 0.5" numOctaves="4" seed="30" stitchTiles="stitch" result="fine"/>
+      <feColorMatrix type="matrix" in="fine" result="fineColor"
+        values="0 0 0 0 0.15
+                0 0 0 0 0.08
+                0 0 0 0 0.02
+                0 0 0 0.25 0"/>
+    </filter>
+  </defs>
+  <!-- Base wood color -->
+  <rect width="256" height="256" fill="#8B6234"/>
+  <!-- Main grain pattern -->
+  <rect width="256" height="256" filter="url(#woodGrain)" opacity="1"/>
+  <!-- Ring detail -->
+  <rect width="256" height="256" filter="url(#woodRings)" opacity="1"/>
+  <!-- Fine grain detail -->
+  <rect width="256" height="256" filter="url(#woodFine)" opacity="1"/>
+</svg>

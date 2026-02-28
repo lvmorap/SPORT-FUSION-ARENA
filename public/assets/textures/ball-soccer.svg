@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="ballShading" cx="40%" cy="35%" r="55%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="70%" stop-color="#e8e8e8"/>
+      <stop offset="100%" stop-color="#b0b0b0"/>
+    </radialGradient>
+    <filter id="ballTexture" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.5" numOctaves="3" seed="6" stitchTiles="stitch" result="tex"/>
+      <feColorMatrix type="matrix" in="tex" result="texColor"
+        values="0 0 0 0 0.5
+                0 0 0 0 0.5
+                0 0 0 0 0.5
+                0 0 0 0.04 0"/>
+    </filter>
+    <clipPath id="ballClip">
+      <circle cx="128" cy="128" r="120"/>
+    </clipPath>
+  </defs>
+  <!-- Ball base with shading -->
+  <circle cx="128" cy="128" r="120" fill="url(#ballShading)" stroke="#555" stroke-width="2"/>
+  <g clip-path="url(#ballClip)">
+    <!-- Subtle leather texture -->
+    <circle cx="128" cy="128" r="120" filter="url(#ballTexture)"/>
+    <!-- Center pentagon -->
+    <polygon points="128,80 152,97 143,124 113,124 104,97" fill="#222" stroke="#333" stroke-width="1.5"/>
+    <!-- Top pentagon -->
+    <polygon points="128,8 155,26 146,56 110,56 101,26" fill="#222" stroke="#333" stroke-width="1.5"/>
+    <!-- Top-right pentagon -->
+    <polygon points="195,50 216,76 200,103 172,100 165,72" fill="#222" stroke="#333" stroke-width="1.5"/>
+    <!-- Bottom-right pentagon -->
+    <polygon points="210,140 218,170 198,192 170,183 168,152" fill="#222" stroke="#333" stroke-width="1.5"/>
+    <!-- Bottom pentagon -->
+    <polygon points="155,200 150,230 128,248 106,230 101,200" fill="#222" stroke="#333" stroke-width="1.5"/>
+    <!-- Bottom-left pentagon -->
+    <polygon points="88,152 86,183 58,192 38,170 46,140" fill="#222" stroke="#333" stroke-width="1.5"/>
+    <!-- Top-left pentagon -->
+    <polygon points="91,72 84,100 56,103 40,76 61,50" fill="#222" stroke="#333" stroke-width="1.5"/>
+    <!-- Seam lines connecting pentagons -->
+    <g stroke="#aaa" stroke-width="1.2" fill="none" opacity="0.6">
+      <!-- From center to surrounding pentagons -->
+      <line x1="128" y1="80" x2="128" y2="56"/>
+      <line x1="152" y1="97" x2="165" y2="72"/>
+      <line x1="143" y1="124" x2="168" y2="152"/>
+      <line x1="113" y1="124" x2="88" y2="152"/>
+      <line x1="104" y1="97" x2="91" y2="72"/>
+      <!-- Outer connecting seams -->
+      <line x1="155" y1="26" x2="195" y2="50"/>
+      <line x1="216" y1="76" x2="218" y2="140"/>
+      <line x1="198" y1="192" x2="155" y2="200"/>
+      <line x1="101" y1="200" x2="58" y2="192"/>
+      <line x1="38" y1="170" x2="40" y2="76"/>
+      <line x1="61" y1="50" x2="101" y2="26"/>
+    </g>
+  </g>
+</svg>

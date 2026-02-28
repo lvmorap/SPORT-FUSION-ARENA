@@ -115,13 +115,13 @@ GameMode (base)     → setup(), update(), cleanup()
 
 ## 🚀 Deploy en GitHub Pages
 
+El proyecto incluye un workflow de GitHub Actions para desplegar automáticamente a GitHub Pages:
+
 1. Haz fork de este repositorio
 2. Ve a **Settings → Pages**
-3. En "Source", selecciona la rama `main` y carpeta `/root`
-4. ¡Listo! Tu juego estará disponible en `https://[usuario].github.io/SPORT-FUSION-ARENA`
-
-### Jugar Localmente
-Simplemente abre `index.html` en tu navegador. El juego funciona con protocolo `file://`.
+3. En "Build and deployment", selecciona "GitHub Actions" como source
+4. ¡Listo! El workflow se ejecutará automáticamente en cada push a `main`
+5. Tu juego estará disponible en `https://[usuario].github.io/SPORT-FUSION-ARENA`
 
 ---
 
@@ -147,19 +147,47 @@ Si las imágenes no cargan, el juego utiliza colores de respaldo temáticos para
 ## 📋 Stack Técnico
 
 - **Motor:** Phaser 3.60+
-- **Lenguaje:** JavaScript ES6+ (Vanilla)
+- **Lenguaje:** TypeScript con configuración estricta
+- **Build Tool:** Vite
+- **Linting:** ESLint con reglas estrictas de TypeScript
+- **Formato:** Prettier
 - **Estilo:** CSS3 con variables
-- **Sin dependencias de build:** Solo HTML, CSS, JS puros
+- **Deploy:** GitHub Actions + GitHub Pages
 - **Compatible:** Chrome, Firefox, Edge, Safari modernos
+
+---
+
+## 🚀 Desarrollo Local
+
+```bash
+# Instalar dependencias
+npm install
+
+# Iniciar servidor de desarrollo
+npm run dev
+
+# Verificar tipos de TypeScript
+npm run typecheck
+
+# Ejecutar linter
+npm run lint
+
+# Formatear código
+npm run format
+
+# Compilar para producción
+npm run build
+```
 
 ---
 
 ## 🎮 ¡A Jugar!
 
-1. Abre `index.html` en tu navegador
-2. Presiona cualquier tecla para comenzar
-3. ¡Compite en 5 deportes reinventados!
-4. El jugador con más victorias al final gana
+1. Ejecuta `npm run dev` para iniciar el servidor de desarrollo
+2. Abre tu navegador en `http://localhost:3000`
+3. Presiona cualquier tecla para comenzar
+4. ¡Compite en 5 deportes reinventados!
+5. El jugador con más victorias al final gana
 
 ---
 

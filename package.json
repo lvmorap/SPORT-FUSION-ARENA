@@ -1,0 +1,44 @@
+{
+  "name": "sport-fusion-arena",
+  "version": "1.0.0",
+  "description": "5 deportes reinventados en 5 minutos — Un juego de deportes 2D local para 2 jugadores.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lvmorap/SPORT-FUSION-ARENA.git"
+  },
+  "keywords": [
+    "game",
+    "phaser",
+    "typescript",
+    "sports"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lvmorap/SPORT-FUSION-ARENA/issues"
+  },
+  "homepage": "https://github.com/lvmorap/SPORT-FUSION-ARENA#readme",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.4",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.20.0",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "phaser": "^3.60.0"
+  }
+}

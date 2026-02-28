@@ -44,6 +44,7 @@ export class PingPongMode extends GameMode {
 
     this.setupCamera();
     this.addLighting(0xeeeeff);
+    this.createRoom();
     this.createFloor();
     this.createTable();
     this.createNet();
@@ -55,7 +56,9 @@ export class PingPongMode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) {return;}
+    if (!this.isActive) {
+      return;
+    }
 
     this.updatePaddles(delta);
     this.updateBall(delta);
@@ -82,18 +85,137 @@ export class PingPongMode extends GameMode {
     this.engine.camera.lookAt(0, TABLE_Y, 0);
   }
 
-  private createFloor(): void {
-    const geo = new THREE.PlaneGeometry(30, 30);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a2e,
+  private createRoom(): void {
+    const roomW = 20;
+    const roomD = 16;
+    const roomH = 8;
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2a4a,
+      roughness: 0.8,
+      metalness: 0.05,
+    });
+
+    // Back wall
+    const backGeo = new THREE.PlaneGeometry(roomW, roomH);
+    const backWall = new THREE.Mesh(backGeo, wallMat);
+    backWall.position.set(0, roomH / 2, -roomD / 2);
+    backWall.receiveShadow = true;
+    this.addToScene(backWall);
+
+    // Left wall
+    const sideGeo = new THREE.PlaneGeometry(roomD, roomH);
+    const leftWall = new THREE.Mesh(sideGeo, wallMat);
+    leftWall.position.set(-roomW / 2, roomH / 2, 0);
+    leftWall.rotation.y = Math.PI / 2;
+    leftWall.receiveShadow = true;
+    this.addToScene(leftWall);
+
+    // Right wall
+    const rightWall = new THREE.Mesh(sideGeo, wallMat);
+    rightWall.position.set(roomW / 2, roomH / 2, 0);
+    rightWall.rotation.y = -Math.PI / 2;
+    rightWall.receiveShadow = true;
+    this.addToScene(rightWall);
+
+    // Ceiling
+    const ceilGeo = new THREE.PlaneGeometry(roomW, roomD);
+    const ceilMat = new THREE.MeshStandardMaterial({
+      color: 0x222244,
       roughness: 0.9,
+      metalness: 0.0,
+    });
+    const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = roomH;
+    this.addToScene(ceiling);
+
+    // Overhead lights (two rectangular panels above the table)
+    const lightPanelGeo = new THREE.BoxGeometry(4, 0.1, 1.5);
+    const lightPanelMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xffffff,
+      emissiveIntensity: 1.5,
+      roughness: 0.2,
+    });
+    for (const xOffset of [-2.5, 2.5]) {
+      const panel = new THREE.Mesh(lightPanelGeo, lightPanelMat);
+      panel.position.set(xOffset, roomH - 0.5, 0);
+      this.addToScene(panel);
+    }
+
+    // Spectator benches along back wall
+    const benchMat = new THREE.MeshStandardMaterial({
+      color: 0x5c3a1e,
+      roughness: 0.7,
       metalness: 0.1,
+    });
+    for (const xOff of [-5, 5]) {
+      const benchSeatGeo = new THREE.BoxGeometry(3, 0.2, 0.8);
+      const benchSeat = new THREE.Mesh(benchSeatGeo, benchMat);
+      benchSeat.position.set(xOff, 0.5, -roomD / 2 + 1.5);
+      benchSeat.castShadow = true;
+      this.addToScene(benchSeat);
+
+      // Bench legs
+      const legGeo = new THREE.BoxGeometry(0.15, 0.5, 0.15);
+      for (const lx of [-1.3, 1.3]) {
+        const leg = new THREE.Mesh(legGeo, benchMat);
+        leg.position.set(xOff + lx, 0.25, -roomD / 2 + 1.5);
+        this.addToScene(leg);
+      }
+    }
+
+    // Scoreboard on back wall
+    const boardGeo = new THREE.BoxGeometry(3, 1.5, 0.1);
+    const boardMat = new THREE.MeshStandardMaterial({
+      color: 0x111133,
+      emissive: 0x000033,
+      emissiveIntensity: 0.3,
+      roughness: 0.3,
+      metalness: 0.4,
+    });
+    const board = new THREE.Mesh(boardGeo, boardMat);
+    board.position.set(0, 5, -roomD / 2 + 0.06);
+    this.addToScene(board);
+  }
+
+  private createFloor(): void {
+    const geo = new THREE.PlaneGeometry(20, 16);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x3a2a1a,
+      roughness: 0.6,
+      metalness: 0.05,
     });
     const floor = new THREE.Mesh(geo, mat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0;
     floor.receiveShadow = true;
     this.addToScene(floor);
+
+    // Court boundary lines on the floor
+    const lineMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xffffff,
+      emissiveIntensity: 0.2,
+      roughness: 0.5,
+    });
+    const hw = TABLE_WIDTH / 2 + 1.5;
+    const hd = TABLE_DEPTH / 2 + 1.5;
+    const lineT = 0.05;
+
+    // Floor court rectangle
+    for (const [w, d, x, z] of [
+      [hw * 2, lineT, 0, -hd] as const,
+      [hw * 2, lineT, 0, hd] as const,
+      [lineT, hd * 2, -hw, 0] as const,
+      [lineT, hd * 2, hw, 0] as const,
+    ]) {
+      const lineGeo = new THREE.PlaneGeometry(w, d);
+      const line = new THREE.Mesh(lineGeo, lineMat);
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(x, 0.005, z);
+      this.addToScene(line);
+    }
   }
 
   private createTable(): void {
@@ -151,7 +273,11 @@ export class PingPongMode extends GameMode {
     this.addToScene(net);
 
     // Net posts
-    const postMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.3 });
+    const postMat = new THREE.MeshStandardMaterial({
+      color: 0x888888,
+      metalness: 0.6,
+      roughness: 0.3,
+    });
     for (const zSide of [-1, 1]) {
       const postGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.7, 8);
       const post = new THREE.Mesh(postGeo, postMat);
@@ -163,11 +289,20 @@ export class PingPongMode extends GameMode {
 
   private createTableLegs(): void {
     const legGeo = new THREE.CylinderGeometry(0.1, 0.1, TABLE_Y - 0.15, 8);
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.3 });
+    const legMat = new THREE.MeshStandardMaterial({
+      color: 0x333333,
+      roughness: 0.5,
+      metalness: 0.3,
+    });
     const halfW = TABLE_WIDTH / 2 - 0.4;
     const halfD = TABLE_DEPTH / 2 - 0.4;
 
-    for (const [lx, lz] of [[-halfW, -halfD], [-halfW, halfD], [halfW, -halfD], [halfW, halfD]]) {
+    for (const [lx, lz] of [
+      [-halfW, -halfD],
+      [-halfW, halfD],
+      [halfW, -halfD],
+      [halfW, halfD],
+    ]) {
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(lx, (TABLE_Y - 0.15) / 2, lz);
       leg.castShadow = true;

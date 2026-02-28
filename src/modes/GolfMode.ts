@@ -26,6 +26,13 @@ export class GolfMode extends GameMode {
   private obstacleBodies: CANNON.Body[] = [];
   private obstacleMeshes: THREE.Object3D[] = [];
 
+  // Windmill
+  private windmillBlades!: THREE.Group;
+  private windmillBladeBodies: CANNON.Body[] = [];
+  private readonly WINDMILL_X = 0;
+  private readonly WINDMILL_Z = -4;
+  private readonly WINDMILL_ROTATION_SPEED = 1.5;
+
   // Hole
   private readonly HOLE_X = 0;
   private readonly HOLE_Z = -12;
@@ -60,6 +67,7 @@ export class GolfMode extends GameMode {
     this.createWalls();
     this.createHole();
     this.createObstacles();
+    this.createWindmill();
     this.createSandTraps();
     this.createGround();
     this.p1 = this.createPlayer(COLORS.P1, -2, 10);
@@ -67,10 +75,16 @@ export class GolfMode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) {return;}
+    if (!this.isActive) {
+      return;
+    }
 
     this.updatePlayer(this.p1, P1_CONTROLS, delta);
     this.updatePlayer(this.p2, P2_CONTROLS, delta);
+
+    // Rotate windmill blades
+    this.windmillBlades.rotation.y += this.WINDMILL_ROTATION_SPEED * delta;
+    this.updateWindmillPhysics();
 
     this.engine.syncPhysics();
 
@@ -99,6 +113,7 @@ export class GolfMode extends GameMode {
     this.wallBodies = [];
     this.obstacleBodies = [];
     this.obstacleMeshes = [];
+    this.windmillBladeBodies = [];
     this.engine.clearScene();
   }
 
@@ -154,8 +169,12 @@ export class GolfMode extends GameMode {
   }
 
   private addWall(
-    sx: number, sy: number, sz: number,
-    px: number, py: number, pz: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    px: number,
+    py: number,
+    pz: number,
     color: number
   ): void {
     const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
@@ -238,8 +257,12 @@ export class GolfMode extends GameMode {
   }
 
   private addObstacleWall(
-    sx: number, sy: number, sz: number,
-    px: number, py: number, pz: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    px: number,
+    py: number,
+    pz: number,
     color: number
   ): void {
     const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
@@ -306,6 +329,126 @@ export class GolfMode extends GameMode {
     this.engine.scene.add(mesh);
   }
 
+  // --- Windmill ---
+
+  private createWindmill(): void {
+    const wx = this.WINDMILL_X;
+    const wz = this.WINDMILL_Z;
+    this.windmillBladeBodies = [];
+
+    // Base (stone pillar)
+    const baseGeo = new THREE.CylinderGeometry(0.4, 0.5, 2.5, 16);
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x8b7355,
+      roughness: 0.7,
+      metalness: 0.1,
+    });
+    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+    baseMesh.position.set(wx, 1.25, wz);
+    baseMesh.castShadow = true;
+    baseMesh.receiveShadow = true;
+    this.engine.scene.add(baseMesh);
+    this.obstacleMeshes.push(baseMesh);
+
+    // Base physics body (static cylinder)
+    const baseShape = new CANNON.Cylinder(0.4, 0.5, 2.5, 16);
+    const baseBody = new CANNON.Body({ mass: 0, shape: baseShape });
+    baseBody.position.set(wx, 1.25, wz);
+    this.engine.world.addBody(baseBody);
+    this.obstacleBodies.push(baseBody);
+
+    // Roof (cone on top)
+    const roofGeo = new THREE.ConeGeometry(0.7, 1.0, 16);
+    const roofMat = new THREE.MeshStandardMaterial({
+      color: 0xcc4444,
+      roughness: 0.5,
+      metalness: 0.1,
+    });
+    const roofMesh = new THREE.Mesh(roofGeo, roofMat);
+    roofMesh.position.set(wx, 3.0, wz);
+    roofMesh.castShadow = true;
+    this.engine.scene.add(roofMesh);
+    this.obstacleMeshes.push(roofMesh);
+
+    // Rotating blades group
+    this.windmillBlades = new THREE.Group();
+    this.windmillBlades.position.set(wx, 1.0, wz);
+
+    const bladeCount = 4;
+    const bladeLength = 3.0;
+    const bladeWidth = 0.5;
+    const bladeThickness = 0.12;
+
+    const bladeMat = new THREE.MeshStandardMaterial({
+      color: 0xdeb887,
+      roughness: 0.6,
+      metalness: 0.1,
+    });
+
+    for (let i = 0; i < bladeCount; i++) {
+      const angle = (i / bladeCount) * Math.PI * 2;
+      const bladeGeo = new THREE.BoxGeometry(bladeLength, bladeThickness, bladeWidth);
+      const blade = new THREE.Mesh(bladeGeo, bladeMat);
+      blade.position.set(
+        (Math.cos(angle) * bladeLength) / 2,
+        0,
+        (Math.sin(angle) * bladeLength) / 2
+      );
+      blade.rotation.y = -angle;
+      blade.castShadow = true;
+      this.windmillBlades.add(blade);
+
+      // Physics body for each blade (kinematic)
+      const bladeShape = new CANNON.Box(
+        new CANNON.Vec3(bladeLength / 2, bladeThickness / 2, bladeWidth / 2)
+      );
+      const bladeBody = new CANNON.Body({ mass: 0, shape: bladeShape });
+      bladeBody.position.set(
+        wx + (Math.cos(angle) * bladeLength) / 2,
+        1.0,
+        wz + (Math.sin(angle) * bladeLength) / 2
+      );
+      this.engine.world.addBody(bladeBody);
+      this.windmillBladeBodies.push(bladeBody);
+    }
+
+    // Hub at center
+    const hubGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.3, 12);
+    const hubMat = new THREE.MeshStandardMaterial({
+      color: 0x666666,
+      metalness: 0.5,
+      roughness: 0.3,
+    });
+    const hub = new THREE.Mesh(hubGeo, hubMat);
+    hub.castShadow = true;
+    this.windmillBlades.add(hub);
+
+    this.engine.scene.add(this.windmillBlades);
+    this.obstacleMeshes.push(this.windmillBlades);
+  }
+
+  private updateWindmillPhysics(): void {
+    const wx = this.WINDMILL_X;
+    const wz = this.WINDMILL_Z;
+    const currentAngle = this.windmillBlades.rotation.y;
+    const bladeCount = 4;
+    const bladeLength = 3.0;
+
+    for (let i = 0; i < bladeCount; i++) {
+      const baseAngle = (i / bladeCount) * Math.PI * 2;
+      const angle = baseAngle + currentAngle;
+      const body = this.windmillBladeBodies[i];
+      if (body) {
+        body.position.set(
+          wx + (Math.cos(angle) * bladeLength) / 2,
+          1.0,
+          wz + (Math.sin(angle) * bladeLength) / 2
+        );
+        body.quaternion.setFromEuler(0, -angle, 0);
+      }
+    }
+  }
+
   // --- Player creation ---
 
   private createPlayer(color: number, startX: number, startZ: number): PlayerState {
@@ -368,10 +511,19 @@ export class GolfMode extends GameMode {
 
   private updatePlayer(
     player: PlayerState,
-    controls: { up: string; down: string; left: string; right: string; action1: string; action2: string },
+    controls: {
+      up: string;
+      down: string;
+      left: string;
+      right: string;
+      action1: string;
+      action2: string;
+    },
     delta: number
   ): void {
-    if (player.scored) {return;}
+    if (player.scored) {
+      return;
+    }
 
     const input = this.engine.input;
 
@@ -415,10 +567,7 @@ export class GolfMode extends GameMode {
 
     player.body.velocity.set(0, 0, 0);
     player.body.angularVelocity.set(0, 0, 0);
-    player.body.applyImpulse(
-      new CANNON.Vec3(dirX * power, 0, dirZ * power),
-      player.body.position
-    );
+    player.body.applyImpulse(new CANNON.Vec3(dirX * power, 0, dirZ * power), player.body.position);
   }
 
   private clampBall(player: PlayerState): void {
@@ -431,7 +580,9 @@ export class GolfMode extends GameMode {
   }
 
   private checkHole(player: PlayerState, playerId: 'P1' | 'P2'): void {
-    if (player.scored) {return;}
+    if (player.scored) {
+      return;
+    }
 
     const dx = player.body.position.x - this.HOLE_X;
     const dz = player.body.position.z - this.HOLE_Z;
@@ -505,8 +656,12 @@ export class GolfMode extends GameMode {
   // --- Utility ---
 
   private normalizeAngle(angle: number): number {
-    while (angle > Math.PI) {angle -= 2 * Math.PI;}
-    while (angle < -Math.PI) {angle += 2 * Math.PI;}
+    while (angle > Math.PI) {
+      angle -= 2 * Math.PI;
+    }
+    while (angle < -Math.PI) {
+      angle += 2 * Math.PI;
+    }
     return angle;
   }
 }

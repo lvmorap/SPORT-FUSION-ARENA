@@ -40,7 +40,8 @@ export class FootballMode extends GameMode {
 
   private readonly FIELD_WIDTH = 30;
   private readonly FIELD_DEPTH = 20;
-  private readonly PLAYER_SPEED = 60;
+  private readonly PLAYER_SPEED = 80;
+  private readonly KICK_FORCE = 18;
   private readonly BALL_RADIUS = 0.3;
   private readonly GOAL_LINE_X = 14;
 
@@ -63,13 +64,19 @@ export class FootballMode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) {return;}
+    if (!this.isActive) {
+      return;
+    }
 
     this.goalTime += delta;
 
-    // Player movement
+    // Player movement with dynamic forces
     this.handlePlayerMovement(this.p1Body, P1_CONTROLS, this.PLAYER_SPEED);
     this.handlePlayerMovement(this.p2Body, P2_CONTROLS, this.PLAYER_SPEED);
+
+    // Kick mechanic: apply impulse to ball when action1 pressed near ball
+    this.handleKick(this.p1Body, P1_CONTROLS.action1);
+    this.handleKick(this.p2Body, P2_CONTROLS.action1);
 
     // Keep players on ground
     this.p1Body.position.y = 0.6;
@@ -77,8 +84,13 @@ export class FootballMode extends GameMode {
     this.p1Body.velocity.y = 0;
     this.p2Body.velocity.y = 0;
 
+    // Rotate player meshes to face movement direction
+    this.rotatePlayerToVelocity(this.p1Mesh, this.p1Body);
+    this.rotatePlayerToVelocity(this.p2Mesh, this.p2Body);
+
     // Oscillate goals along Z axis
-    const goalZ = Math.sin(this.goalTime * this.goalOscillationSpeed) * this.goalOscillationAmplitude;
+    const goalZ =
+      Math.sin(this.goalTime * this.goalOscillationSpeed) * this.goalOscillationAmplitude;
     this.goal1Group.position.z = goalZ;
     this.goal2Group.position.z = goalZ;
 
@@ -137,12 +149,7 @@ export class FootballMode extends GameMode {
   private createFieldLines(): void {
     const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-    const createLine = (
-      width: number,
-      depth: number,
-      x: number,
-      z: number
-    ): THREE.Mesh => {
+    const createLine = (width: number, depth: number, x: number, z: number): THREE.Mesh => {
       const geo = new THREE.PlaneGeometry(width, depth);
       const mesh = new THREE.Mesh(geo, lineMat);
       mesh.rotation.x = -Math.PI / 2;
@@ -158,9 +165,9 @@ export class FootballMode extends GameMode {
     const t = 0.1; // line thickness
 
     createLine(this.FIELD_WIDTH, t, 0, -hd); // top
-    createLine(this.FIELD_WIDTH, t, 0, hd);  // bottom
+    createLine(this.FIELD_WIDTH, t, 0, hd); // bottom
     createLine(t, this.FIELD_DEPTH, -hw, 0); // left
-    createLine(t, this.FIELD_DEPTH, hw, 0);  // right
+    createLine(t, this.FIELD_DEPTH, hw, 0); // right
 
     // Center line
     createLine(t, this.FIELD_DEPTH, 0, 0);
@@ -199,9 +206,7 @@ export class FootballMode extends GameMode {
       py: number,
       pz: number
     ): void => {
-      const shape = new CANNON.Box(
-        new CANNON.Vec3(sx / 2, sy / 2, sz / 2)
-      );
+      const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
       const body = new CANNON.Body({ mass: 0, shape });
       body.position.set(px, py, pz);
       this.engine.world.addBody(body);
@@ -221,17 +226,41 @@ export class FootballMode extends GameMode {
     };
 
     // Top wall (z = -hd)
-    createWall(this.FIELD_WIDTH + wallThickness * 2, wallHeight, wallThickness,
-      0, wallHeight / 2, -hd - wallThickness / 2);
+    createWall(
+      this.FIELD_WIDTH + wallThickness * 2,
+      wallHeight,
+      wallThickness,
+      0,
+      wallHeight / 2,
+      -hd - wallThickness / 2
+    );
     // Bottom wall (z = +hd)
-    createWall(this.FIELD_WIDTH + wallThickness * 2, wallHeight, wallThickness,
-      0, wallHeight / 2, hd + wallThickness / 2);
+    createWall(
+      this.FIELD_WIDTH + wallThickness * 2,
+      wallHeight,
+      wallThickness,
+      0,
+      wallHeight / 2,
+      hd + wallThickness / 2
+    );
     // Left wall (x = -hw)
-    createWall(wallThickness, wallHeight, this.FIELD_DEPTH,
-      -hw - wallThickness / 2, wallHeight / 2, 0);
+    createWall(
+      wallThickness,
+      wallHeight,
+      this.FIELD_DEPTH,
+      -hw - wallThickness / 2,
+      wallHeight / 2,
+      0
+    );
     // Right wall (x = +hw)
-    createWall(wallThickness, wallHeight, this.FIELD_DEPTH,
-      hw + wallThickness / 2, wallHeight / 2, 0);
+    createWall(
+      wallThickness,
+      wallHeight,
+      this.FIELD_DEPTH,
+      hw + wallThickness / 2,
+      wallHeight / 2,
+      0
+    );
   }
 
   private createGoals(): void {
@@ -282,7 +311,10 @@ export class FootballMode extends GameMode {
 
     // Neon glow outline - left post
     const glowGeo = new THREE.CylinderGeometry(
-      postRadius + 0.08, postRadius + 0.08, postHeight + 0.1, 12
+      postRadius + 0.08,
+      postRadius + 0.08,
+      postHeight + 0.1,
+      12
     );
     const leftGlow = new THREE.Mesh(glowGeo, glowMat);
     leftGlow.position.copy(leftPost.position);
@@ -295,7 +327,10 @@ export class FootballMode extends GameMode {
 
     // Neon glow outline - crossbar
     const crossGlowGeo = new THREE.CylinderGeometry(
-      postRadius + 0.08, postRadius + 0.08, goalWidth + 0.1, 12
+      postRadius + 0.08,
+      postRadius + 0.08,
+      goalWidth + 0.1,
+      12
     );
     const crossGlow = new THREE.Mesh(crossGlowGeo, glowMat);
     crossGlow.position.copy(crossbar.position);
@@ -360,16 +395,47 @@ export class FootballMode extends GameMode {
     this.engine.world.addBody(this.groundBody);
   }
 
+  // --- Player dynamics ---
+
+  private rotatePlayerToVelocity(mesh: THREE.Group, body: CANNON.Body): void {
+    const vx = body.velocity.x;
+    const vz = body.velocity.z;
+    const speed = Math.sqrt(vx * vx + vz * vz);
+    if (speed > 0.5) {
+      const targetAngle = Math.atan2(vx, vz);
+      mesh.rotation.y = targetAngle;
+    }
+  }
+
+  private handleKick(playerBody: CANNON.Body, actionKey: string): void {
+    if (!this.engine.input.wasPressed(actionKey)) {
+      return;
+    }
+    const dx = this.ballBody.position.x - playerBody.position.x;
+    const dz = this.ballBody.position.z - playerBody.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 1.5) {
+      const nx = dx / dist;
+      const nz = dz / dist;
+      this.ballBody.velocity.set(0, 0, 0);
+      this.ballBody.applyImpulse(
+        new CANNON.Vec3(nx * this.KICK_FORCE, 0, nz * this.KICK_FORCE),
+        this.ballBody.position,
+      );
+    }
+  }
+
   // --- Goal detection ---
 
   private checkGoals(goalZ: number): void {
-    if (this.goalCooldown) {return;}
+    if (this.goalCooldown) {
+      return;
+    }
 
     const bx = this.ballBody.position.x;
     const bz = this.ballBody.position.z;
 
-    const withinGoalZ =
-      bz > goalZ - this.goalHalfWidth && bz < goalZ + this.goalHalfWidth;
+    const withinGoalZ = bz > goalZ - this.goalHalfWidth && bz < goalZ + this.goalHalfWidth;
 
     // Ball crossed left goal line → P2 scores
     if (bx < -this.GOAL_LINE_X && withinGoalZ) {

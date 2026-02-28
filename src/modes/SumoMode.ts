@@ -379,14 +379,10 @@ export class SumoMode extends GameMode {
 
     if (p1Dist <= this.ZONE_RADIUS) {
       this.scoreP1 += 2 * delta;
-    } else {
-      this.scoreP1 = Math.max(0, this.scoreP1 - 1 * delta);
     }
 
     if (p2Dist <= this.ZONE_RADIUS) {
       this.scoreP2 += 2 * delta;
-    } else {
-      this.scoreP2 = Math.max(0, this.scoreP2 - 1 * delta);
     }
   }
 

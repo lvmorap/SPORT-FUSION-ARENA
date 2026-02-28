@@ -14,6 +14,7 @@ interface PlayerState {
   startX: number;
   startZ: number;
   scored: boolean;
+  strokes: number;
 }
 
 export class GolfMode extends GameMode {
@@ -26,12 +27,16 @@ export class GolfMode extends GameMode {
   private obstacleBodies: CANNON.Body[] = [];
   private obstacleMeshes: THREE.Object3D[] = [];
 
+  // Shared physics materials
+  private readonly wallMaterial = new CANNON.Material({ restitution: 0.8 });
+  private readonly bumperMaterial = new CANNON.Material({ restitution: 1.0 });
+
   // Windmill
   private windmillBlades!: THREE.Group;
   private windmillBladeBodies: CANNON.Body[] = [];
   private readonly WINDMILL_X = 0;
   private readonly WINDMILL_Z = -4;
-  private readonly WINDMILL_ROTATION_SPEED = 1.5;
+  private readonly WINDMILL_ROTATION_SPEED = 1.2;
 
   // Hole
   private readonly HOLE_X = 0;
@@ -45,8 +50,8 @@ export class GolfMode extends GameMode {
   // Ball
   private readonly BALL_RADIUS = 0.2;
   private readonly MAX_CHARGE = 2;
-  private readonly MAX_POWER = 25;
-  private readonly SCORE_POINTS = 10;
+  private readonly MAX_POWER = 18;
+  private readonly STROKE_SCORES = [10, 7, 5, 3, 2, 1];
 
   // Reset cooldown
   private p1ResetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -178,7 +183,7 @@ export class GolfMode extends GameMode {
     color: number
   ): void {
     const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
-    const body = new CANNON.Body({ mass: 0, shape });
+    const body = new CANNON.Body({ mass: 0, shape, material: this.wallMaterial });
     body.position.set(px, py, pz);
     this.engine.world.addBody(body);
     this.wallBodies.push(body);
@@ -246,14 +251,26 @@ export class GolfMode extends GameMode {
   // --- Obstacles ---
 
   private createObstacles(): void {
-    // Wall obstacles on the course
-    this.addObstacleWall(4, 0.6, 0.4, -3, 0.3, 2, 0x6b5b3a);
-    this.addObstacleWall(3, 0.6, 0.4, 4, 0.3, -4, 0x6b5b3a);
-    this.addObstacleWall(0.4, 0.6, 4, -2, 0.3, -7, 0x6b5b3a);
-    this.addObstacleWall(5, 0.6, 0.4, 1, 0.3, 5, 0x6b5b3a);
+    // Entry funnel walls near tee area
+    this.addObstacleWall(6, 0.6, 0.6, -4, 0.3, 6, 0x6b5b3a);
+    this.addObstacleWall(6, 0.6, 0.6, 4, 0.3, 6, 0x6b5b3a);
 
-    // Central bumper (cylinder)
-    this.addBumper(0, -1, 1.0, 0x8b7355);
+    // Zigzag channel walls in mid-section
+    this.addObstacleWall(5, 0.6, 0.6, -3, 0.3, 2, 0x6b5b3a);
+    this.addObstacleWall(5, 0.6, 0.6, 3, 0.3, -1, 0x6b5b3a);
+
+    // Narrowing corridor approaching the hole
+    this.addObstacleWall(0.6, 0.6, 5, -3, 0.3, -8, 0x6b5b3a);
+    this.addObstacleWall(0.6, 0.6, 5, 3, 0.3, -8, 0x6b5b3a);
+
+    // Guard wall near the hole
+    this.addObstacleWall(3, 0.6, 0.6, 0, 0.3, -10, 0x6b5b3a);
+
+    // Side bumpers for ricochet fun
+    this.addBumper(-6, 0, 0.8, 0x8b7355);
+    this.addBumper(6, 0, 0.8, 0x8b7355);
+    this.addBumper(-5, -5, 0.7, 0x8b7355);
+    this.addBumper(5, -5, 0.7, 0x8b7355);
   }
 
   private addObstacleWall(
@@ -266,7 +283,7 @@ export class GolfMode extends GameMode {
     color: number
   ): void {
     const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
-    const body = new CANNON.Body({ mass: 0, shape });
+    const body = new CANNON.Body({ mass: 0, shape, material: this.wallMaterial });
     body.position.set(px, py, pz);
     this.engine.world.addBody(body);
     this.obstacleBodies.push(body);
@@ -288,7 +305,7 @@ export class GolfMode extends GameMode {
   private addBumper(x: number, z: number, radius: number, color: number): void {
     const height = 0.6;
     const shape = new CANNON.Cylinder(radius, radius, height, 16);
-    const body = new CANNON.Body({ mass: 0, shape });
+    const body = new CANNON.Body({ mass: 0, shape, material: this.bumperMaterial });
     body.position.set(x, height / 2, z);
     this.engine.world.addBody(body);
     this.obstacleBodies.push(body);
@@ -310,9 +327,10 @@ export class GolfMode extends GameMode {
   // --- Sand Traps ---
 
   private createSandTraps(): void {
-    this.addSandTrap(5, 0, 2.5, 1.8);
-    this.addSandTrap(-4, -9, 3, 2);
-    this.addSandTrap(3, 7, 2, 1.5);
+    this.addSandTrap(0, 4, 3, 2);
+    this.addSandTrap(-5, -3, 2.5, 2);
+    this.addSandTrap(5, -3, 2.5, 2);
+    this.addSandTrap(0, -6, 2, 1.5);
   }
 
   private addSandTrap(x: number, z: number, w: number, d: number): void {
@@ -372,12 +390,12 @@ export class GolfMode extends GameMode {
 
     // Rotating blades group
     this.windmillBlades = new THREE.Group();
-    this.windmillBlades.position.set(wx, 1.0, wz);
+    this.windmillBlades.position.set(wx, 0.3, wz);
 
     const bladeCount = 4;
     const bladeLength = 3.0;
-    const bladeWidth = 0.5;
-    const bladeThickness = 0.12;
+    const bladeWidth = 0.6;
+    const bladeThickness = 0.2;
 
     const bladeMat = new THREE.MeshStandardMaterial({
       color: 0xdeb887,
@@ -405,7 +423,7 @@ export class GolfMode extends GameMode {
       const bladeBody = new CANNON.Body({ mass: 0, shape: bladeShape });
       bladeBody.position.set(
         wx + (Math.cos(angle) * bladeLength) / 2,
-        1.0,
+        0.3,
         wz + (Math.sin(angle) * bladeLength) / 2
       );
       this.engine.world.addBody(bladeBody);
@@ -441,7 +459,7 @@ export class GolfMode extends GameMode {
       if (body) {
         body.position.set(
           wx + (Math.cos(angle) * bladeLength) / 2,
-          1.0,
+          0.3,
           wz + (Math.sin(angle) * bladeLength) / 2
         );
         body.quaternion.setFromEuler(0, -angle, 0);
@@ -472,6 +490,7 @@ export class GolfMode extends GameMode {
       startX,
       startZ,
       scored: false,
+      strokes: 0,
     };
   }
 
@@ -568,6 +587,7 @@ export class GolfMode extends GameMode {
     player.body.velocity.set(0, 0, 0);
     player.body.angularVelocity.set(0, 0, 0);
     player.body.applyImpulse(new CANNON.Vec3(dirX * power, 0, dirZ * power), player.body.position);
+    player.strokes++;
   }
 
   private clampBall(player: PlayerState): void {
@@ -590,10 +610,12 @@ export class GolfMode extends GameMode {
 
     if (dist < this.HOLE_RADIUS) {
       player.scored = true;
+      const idx = Math.min(Math.max(player.strokes - 1, 0), this.STROKE_SCORES.length - 1);
+      const points = this.STROKE_SCORES[idx];
       if (playerId === 'P1') {
-        this.scoreP1 += this.SCORE_POINTS;
+        this.scoreP1 += points;
       } else {
-        this.scoreP2 += this.SCORE_POINTS;
+        this.scoreP2 += points;
       }
 
       // Hide ball briefly, then reset
@@ -619,6 +641,7 @@ export class GolfMode extends GameMode {
     player.aimAngle = -Math.PI / 2;
     player.charging = false;
     player.chargeTime = 0;
+    player.strokes = 0;
   }
 
   // --- Aim / Power visuals ---

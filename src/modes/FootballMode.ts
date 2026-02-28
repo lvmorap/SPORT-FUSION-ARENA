@@ -52,7 +52,7 @@ export class FootballMode extends GameMode {
   private readonly PLAYER_SPEED = 14;
   private readonly KICK_FORCE = 28;
   private readonly BALL_RADIUS = 0.45;
-  private readonly GOAL_LINE_X = 16;
+  private readonly GOAL_LINE_X = 15.5;
   private readonly JUMP_IMPULSE = 18;
   private readonly FALL_GRAVITY_MULT = 3.0;
   private readonly PLAYER_HALF_H = 1.1;
@@ -395,8 +395,9 @@ export class FootballMode extends GameMode {
    *  Goals
    * ---------------------------------------------------------------- */
   private createGoals(): void {
-    this.goal1Group = this.buildGoal(COLORS.P2, -this.FIELD_WIDTH / 2);
-    this.goal2Group = this.buildGoal(COLORS.P1, this.FIELD_WIDTH / 2);
+    const nd = 1.5;
+    this.goal1Group = this.buildGoal(COLORS.P2, -this.FIELD_WIDTH / 2 + nd);
+    this.goal2Group = this.buildGoal(COLORS.P1, this.FIELD_WIDTH / 2 - nd);
   }
 
   private buildGoal(color: number, xPos: number): THREE.Group {

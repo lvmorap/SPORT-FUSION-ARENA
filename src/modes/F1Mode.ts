@@ -54,7 +54,7 @@ const OBSTACLE_HIT_RADIUS = 1.5;
 
 const TRAIL_STUN_DURATION = 1;
 const TRAIL_SEGMENT_SPACING = 0.6;
-const TRAIL_MAX_SEGMENTS = 100;
+const TRAIL_MAX_AGE = 1.0;
 const TRAIL_HIT_RADIUS = 0.5;
 
 const TURBO_ABILITY_SPEED_MULT = 2.0;
@@ -112,6 +112,7 @@ interface TrailSegment {
   x: number;
   z: number;
   mesh: THREE.Mesh;
+  time: number;
 }
 
 // ─── F1Mode ───────────────────────────────────────────────────
@@ -862,6 +863,16 @@ export class F1Mode extends GameMode {
   private dropTrailSegments(): void {
     this.dropTrailForPlayer(this.stateP1, this.lastTrailPosP1, this.trailP1, this.trailMatP1);
     this.dropTrailForPlayer(this.stateP2, this.lastTrailPosP2, this.trailP2, this.trailMatP2);
+    this.expireOldTrail(this.trailP1);
+    this.expireOldTrail(this.trailP2);
+  }
+
+  private expireOldTrail(trail: TrailSegment[]): void {
+    const now = performance.now();
+    while (trail.length > 0 && (now - trail[0].time) > TRAIL_MAX_AGE * 1000) {
+      const old = trail.shift();
+      if (old) { this.removeFromScene(old.mesh); }
+    }
   }
 
   private dropTrailForPlayer(
@@ -877,15 +888,10 @@ export class F1Mode extends GameMode {
     const mesh = new THREE.Mesh(this.trailGeo, material);
     mesh.position.set(lastPos.x, 0.25, lastPos.z);
     this.addToScene(mesh);
-    trail.push({ x: lastPos.x, z: lastPos.z, mesh });
+    trail.push({ x: lastPos.x, z: lastPos.z, mesh, time: performance.now() });
 
     lastPos.x = state.x;
     lastPos.z = state.z;
-
-    while (trail.length > TRAIL_MAX_SEGMENTS) {
-      const old = trail.shift();
-      if (old) { this.removeFromScene(old.mesh); }
-    }
   }
 
   private checkTrailCollisions(): void {

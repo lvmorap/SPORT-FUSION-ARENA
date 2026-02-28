@@ -49,7 +49,7 @@ export class FootballMode extends GameMode {
   private readonly FIELD_WIDTH = 34;
   private readonly FIELD_DEPTH = 22;
   private readonly WALL_HEIGHT = 1.5;
-  private readonly PLAYER_SPEED = 120;
+  private readonly PLAYER_SPEED = 14;
   private readonly KICK_FORCE = 28;
   private readonly BALL_RADIUS = 0.45;
   private readonly GOAL_LINE_X = 16;
@@ -102,9 +102,9 @@ export class FootballMode extends GameMode {
   public update(delta: number): void {
     if (!this.isActive) {return;}
 
-    // ── Player movement ──
-    this.handlePlayerMovement(this.p1Body, P1_CONTROLS, this.PLAYER_SPEED);
-    this.handlePlayerMovement(this.p2Body, P2_CONTROLS, this.PLAYER_SPEED);
+    // ── Player movement (velocity-based, like sumo) ──
+    this.handleFootballMovement(this.p1Body, P1_CONTROLS);
+    this.handleFootballMovement(this.p2Body, P2_CONTROLS);
 
     // ── Jump ──
     this.handleJump(this.p1Body, P1_CONTROLS.action2);
@@ -383,91 +383,81 @@ export class FootballMode extends GameMode {
 
   private buildGoal(color: number, xPos: number): THREE.Group {
     const group = new THREE.Group();
-    const ph = this.GOAL_HALF_HEIGHT * 2;
     const gw = this.GOAL_HALF_WIDTH * 2;
-    const r = 0.18;
+    const gh = this.GOAL_HALF_HEIGHT * 2;
+    const r = 0.12;
+    const nd = 1.5;
+    const sign = xPos < 0 ? -1 : 1;
 
-    const postMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.8 });
-    const glowMat = new THREE.MeshStandardMaterial({
-      color, emissive: color, emissiveIntensity: 1.5, roughness: 0.1, metalness: 0.3,
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 0.15, metalness: 0.9,
+    });
+    const barMat = new THREE.MeshStandardMaterial({
+      color, emissive: color, emissiveIntensity: 0.8, roughness: 0.2, metalness: 0.5,
+    });
+    const netMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.3, side: THREE.DoubleSide, wireframe: true,
     });
 
-    const postGeo = new THREE.CylinderGeometry(r, r, ph, 12);
-    const crossGeo = new THREE.CylinderGeometry(r, r, gw, 12);
-
     // Posts
-    const lp = new THREE.Mesh(postGeo, postMat);
+    const postGeo = new THREE.CylinderGeometry(r, r, gh, 12);
+    const lp = new THREE.Mesh(postGeo, frameMat);
     lp.position.set(0, 0, -gw / 2);
     lp.castShadow = true;
     group.add(lp);
 
-    const rp = new THREE.Mesh(postGeo, postMat);
+    const rp = new THREE.Mesh(postGeo, frameMat);
     rp.position.set(0, 0, gw / 2);
     rp.castShadow = true;
     group.add(rp);
 
-    // Crossbar
-    const cb = new THREE.Mesh(crossGeo, postMat);
-    cb.position.set(0, ph / 2, 0);
+    // Crossbar (team-colored accent)
+    const crossGeo = new THREE.CylinderGeometry(r * 1.1, r * 1.1, gw + r * 2, 12);
+    const cb = new THREE.Mesh(crossGeo, barMat);
+    cb.position.set(0, gh / 2, 0);
     cb.rotation.x = Math.PI / 2;
     cb.castShadow = true;
     group.add(cb);
 
     // Bottom bar
-    const bb = new THREE.Mesh(crossGeo, postMat);
-    bb.position.set(0, -ph / 2, 0);
+    const bbGeo = new THREE.CylinderGeometry(r * 0.9, r * 0.9, gw + r * 2, 12);
+    const bb = new THREE.Mesh(bbGeo, frameMat);
+    bb.position.set(0, -gh / 2, 0);
     bb.rotation.x = Math.PI / 2;
     group.add(bb);
 
-    // Glow outlines
-    const gr = r + 0.1;
-    const glowPostGeo = new THREE.CylinderGeometry(gr, gr, ph + 0.15, 12);
-    const glowCrossGeo = new THREE.CylinderGeometry(gr, gr, gw + 0.15, 12);
+    // Net — back panel (vertical, in YZ plane, offset behind goal)
+    const backGeo = new THREE.PlaneGeometry(gw, gh, 10, 6);
+    const backNet = new THREE.Mesh(backGeo, netMat);
+    backNet.rotation.y = Math.PI / 2;
+    backNet.position.set(sign * nd, 0, 0);
+    group.add(backNet);
 
-    const lg = new THREE.Mesh(glowPostGeo, glowMat);
-    lg.position.copy(lp.position);
-    group.add(lg);
-    const rg = new THREE.Mesh(glowPostGeo, glowMat);
-    rg.position.copy(rp.position);
-    group.add(rg);
-
-    const cg = new THREE.Mesh(glowCrossGeo, glowMat);
-    cg.position.copy(cb.position);
-    cg.rotation.x = Math.PI / 2;
-    group.add(cg);
-    const bg = new THREE.Mesh(glowCrossGeo, glowMat);
-    bg.position.copy(bb.position);
-    bg.rotation.x = Math.PI / 2;
-    group.add(bg);
-
-    // Net
-    const nd = 2;
-    const netMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.2, side: THREE.DoubleSide, wireframe: true,
-    });
-    const ox = xPos < 0 ? -nd / 2 : nd / 2;
-    const backGeo = new THREE.PlaneGeometry(gw, ph, 14, 8);
-    group.add(new THREE.Mesh(backGeo, netMat).translateX(ox));
-    const topGeo = new THREE.PlaneGeometry(gw, nd, 14, 4);
-    const topNet = new THREE.Mesh(topGeo, netMat);
-    topNet.rotation.x = Math.PI / 2;
-    topNet.position.set(ox / 2, ph / 2, 0);
+    // Net — top panel (horizontal)
+    const horizGeo = new THREE.PlaneGeometry(nd, gw, 3, 10);
+    const topNet = new THREE.Mesh(horizGeo, netMat);
+    topNet.rotation.x = -Math.PI / 2;
+    topNet.position.set(sign * nd / 2, gh / 2, 0);
     group.add(topNet);
-    const botNet = new THREE.Mesh(topGeo, netMat);
-    botNet.rotation.x = Math.PI / 2;
-    botNet.position.set(ox / 2, -ph / 2, 0);
+
+    // Net — bottom panel (horizontal)
+    const botNet = new THREE.Mesh(horizGeo, netMat);
+    botNet.rotation.x = -Math.PI / 2;
+    botNet.position.set(sign * nd / 2, -gh / 2, 0);
     group.add(botNet);
-    const sideGeo = new THREE.PlaneGeometry(nd, ph, 4, 8);
+
+    // Net — left side panel (vertical, in XY plane)
+    const sideGeo = new THREE.PlaneGeometry(nd, gh, 3, 6);
     const ls = new THREE.Mesh(sideGeo, netMat);
-    ls.rotation.y = Math.PI / 2;
-    ls.position.set(ox / 2, 0, -gw / 2);
+    ls.position.set(sign * nd / 2, 0, -gw / 2);
     group.add(ls);
+
+    // Net — right side panel (vertical, in XY plane)
     const rs = new THREE.Mesh(sideGeo, netMat);
-    rs.rotation.y = Math.PI / 2;
-    rs.position.set(ox / 2, 0, gw / 2);
+    rs.position.set(sign * nd / 2, 0, gw / 2);
     group.add(rs);
 
-    group.position.set(xPos, ph / 2 + 0.5, 0);
+    group.position.set(xPos, gh / 2 + 0.5, 0);
     this.engine.scene.add(group);
     return group;
   }
@@ -696,6 +686,29 @@ export class FootballMode extends GameMode {
     if (body.position.x > hw) { body.position.x = hw; body.velocity.x = 0; }
     if (body.position.z < -hd) { body.position.z = -hd; body.velocity.z = 0; }
     if (body.position.z > hd) { body.position.z = hd; body.velocity.z = 0; }
+  }
+
+  private handleFootballMovement(
+    body: CANNON.Body,
+    controls: { up: string; down: string; left: string; right: string },
+  ): void {
+    const input = this.engine.input;
+    let dirX = 0;
+    let dirZ = 0;
+
+    if (input.isDown(controls.up)) { dirZ -= 1; }
+    if (input.isDown(controls.down)) { dirZ += 1; }
+    if (input.isDown(controls.left)) { dirX -= 1; }
+    if (input.isDown(controls.right)) { dirX += 1; }
+
+    const len = Math.sqrt(dirX * dirX + dirZ * dirZ);
+    if (len > 0) {
+      body.velocity.x = (dirX / len) * this.PLAYER_SPEED;
+      body.velocity.z = (dirZ / len) * this.PLAYER_SPEED;
+    } else {
+      body.velocity.x *= 0.8;
+      body.velocity.z *= 0.8;
+    }
   }
 
   private faceVelocity(mesh: THREE.Group, body: CANNON.Body): void {

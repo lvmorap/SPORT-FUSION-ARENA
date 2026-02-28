@@ -1,7 +1,7 @@
 {
   "name": "sport-fusion-arena",
   "version": "2.0.0",
-  "description": "5 deportes reinventados en 3D — Un juego de deportes 3D local para 2 jugadores con Three.js",
+  "description": "4 deportes reinventados en 3D — Un juego de deportes 3D local para 2 jugadores con Three.js",
   "type": "module",
   "scripts": {
     "dev": "vite",

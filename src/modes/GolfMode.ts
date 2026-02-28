@@ -462,7 +462,7 @@ export class GolfMode extends GameMode {
     const apx = px - ax;
     const apy = py - ay;
     const ab2 = abx * abx + aby * aby;
-    if (ab2 === 0) {
+    if (ab2 < 0.0001) {
       return Math.sqrt(apx * apx + apy * apy);
     }
     const t = Phaser.Math.Clamp((apx * abx + apy * aby) / ab2, 0, 1);

@@ -26,7 +26,7 @@ const POWER_SPEED = 0.8;
 const SETTLE_DELAY = 0.3;
 const CUE_START_X = -3;
 
-const POOL_BALL_COLORS: readonly number[] = [
+const POOL_BALL_COLORS = [
   0xf5f0e8, // 0 cue (white)
   0xffcc00, // 1 yellow
   0x3366cc, // 2 blue
@@ -35,7 +35,7 @@ const POOL_BALL_COLORS: readonly number[] = [
   0xff8800, // 5 orange
   0x228844, // 6 green
   0x884422, // 7 brown
-];
+] as const;
 
 const POCKET_POSITIONS: ReadonlyArray<{ x: number; z: number }> = [
   { x: -FELT_HW + 0.1, z: -FELT_HD + 0.1 },
@@ -548,11 +548,19 @@ export class BillarMode extends GameMode {
 
     // Unstick from other balls
     for (const other of this.balls) {
-      if (other === cue || !other.alive) {continue;}
+      if (other === cue || !other.alive) { continue; }
       const dx = cue.x - other.x;
       const dz = cue.z - other.z;
-      if (Math.sqrt(dx * dx + dz * dz) < BALL_R * 3) {
-        cue.z += BALL_R * 3;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < BALL_R * 3) {
+        // Push cue ball away from the other ball along the collision axis
+        const nx = dist > 0 ? dx / dist : 0;
+        const nz = dist > 0 ? dz / dist : 1;
+        cue.x += nx * BALL_R * 3;
+        cue.z += nz * BALL_R * 3;
+        // Clamp to felt area
+        cue.x = Math.max(-FELT_HW + BALL_R, Math.min(FELT_HW - BALL_R, cue.x));
+        cue.z = Math.max(-FELT_HD + BALL_R, Math.min(FELT_HD - BALL_R, cue.z));
       }
     }
   }

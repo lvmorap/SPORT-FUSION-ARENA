@@ -1,332 +1,389 @@
-import Phaser from 'phaser';
+import * as THREE from 'three';
 import { GameMode } from './GameMode';
-import type { GameScene, TrailPoint } from '../types';
-import { isArcadeBody } from '../utils/helpers';
+import { P1_CONTROLS, P2_CONTROLS, COLORS } from '../types';
+
+const TABLE_WIDTH = 12;
+const TABLE_DEPTH = 8;
+const TABLE_Y = 1;
+const PADDLE_X = 5.5;
+const PADDLE_HALF_DEPTH = 1;
+const BALL_RADIUS = 0.15;
+const BALL_START_SPEED = 8;
+const BALL_MAX_SPEED = 25;
+const BALL_SPEED_MULTIPLIER = 1.1;
+const PADDLE_SPEED = 12;
+const Z_BOUND = 3.5;
+const SCORE_X = 6;
+const TRAIL_COUNT = 8;
+
+interface BallState {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vz: number;
+  speed: number;
+}
 
 export class PingPongMode extends GameMode {
-  private bg: Phaser.GameObjects.Image | null = null;
-  private ball: Phaser.Physics.Arcade.Image | null = null;
-  private p1: Phaser.Physics.Arcade.Image | null = null;
-  private p2: Phaser.Physics.Arcade.Image | null = null;
-  private ballTrailGraphics: Phaser.GameObjects.Graphics | null = null;
-  private ballTrail: TrailPoint[] = [];
-  private hitCount = 0;
-  private justScored = false;
-  private rallyCount = 0;
-
-  public constructor(scene: GameScene) {
-    super(scene);
-  }
+  private paddleP1!: THREE.Mesh;
+  private paddleP2!: THREE.Mesh;
+  private ballMesh!: THREE.Mesh;
+  private ballState: BallState = { x: 0, y: 0, z: 0, vx: 0, vz: 0, speed: BALL_START_SPEED };
+  private trailMeshes: THREE.Mesh[] = [];
+  private trailPositions: THREE.Vector3[] = [];
+  private sceneObjects: THREE.Object3D[] = [];
 
   public setup(): void {
-    this.bg = this.scene.add
-      .image(400, 300, 'bg_pingpong')
-      .setDisplaySize(800, 600)
-      .setAlpha(0.4)
-      .setDepth(-10);
+    this.scoreP1 = 0;
+    this.scoreP2 = 0;
+    this.engine.clearScene();
+    this.sceneObjects = [];
+    this.trailMeshes = [];
+    this.trailPositions = [];
 
-    const g = this.scene.add.graphics();
-    g.lineStyle(3, 0xffffff, 0.8);
-    g.strokeRect(80, 80, 640, 440);
-    g.lineStyle(6, 0xffffff, 1);
-    g.lineBetween(400, 75, 400, 525);
-
-    g.fillStyle(0xffffff, 0.6);
-    g.fillCircle(80, 80, 5);
-    g.fillCircle(720, 80, 5);
-    g.fillCircle(80, 520, 5);
-    g.fillCircle(720, 520, 5);
-
-    this.ball = this.scene.physics.add.image(400, 300, 'ball_pingpong');
-    this.ball.setVelocity(250, Phaser.Math.Between(-120, 120));
-    this.ball.setBounce(1, 1);
-    this.ball.setMaxVelocity(1000, 700);
-    this.ball.setCollideWorldBounds(false);
-
-    this.ballTrailGraphics = this.scene.add.graphics();
-
-    this.p1 = this.scene.physics.add.image(100, 300, 'p1_pingpong');
-    this.p2 = this.scene.physics.add.image(700, 300, 'p2_pingpong');
-    this.p1.setImmovable(true);
-    this.p2.setImmovable(true);
-    if (isArcadeBody(this.p1.body)) {
-      this.p1.body.allowGravity = false;
-    }
-    if (isArcadeBody(this.p2.body)) {
-      this.p2.body.allowGravity = false;
-    }
+    this.setupCamera();
+    this.addLighting(0xeeeeff);
+    this.createFloor();
+    this.createTable();
+    this.createNet();
+    this.createTableLegs();
+    this.createPaddles();
+    this.createBall();
+    this.createTrail();
+    this.resetBall();
   }
 
-  public update(_time: number, delta: number): void {
-    if (this.p1 === null || this.p2 === null || this.ball === null) {
-      return;
-    }
+  public update(delta: number): void {
+    if (!this.isActive) {return;}
 
-    const accel = 1800;
-    const maxSpeed = 400;
-    const p1Body = this.p1.body;
-    const p2Body = this.p2.body;
-
-    if (isArcadeBody(p1Body)) {
-      if (this.scene.keys.w.isDown) {
-        p1Body.setAccelerationY(-accel);
-      } else if (this.scene.keys.s.isDown) {
-        p1Body.setAccelerationY(accel);
-      } else {
-        p1Body.setAccelerationY(0);
-        p1Body.velocity.y *= 0.85;
-      }
-      p1Body.velocity.y = Phaser.Math.Clamp(p1Body.velocity.y, -maxSpeed, maxSpeed);
-
-      if (this.scene.keys.a.isDown) {
-        p1Body.setAccelerationX(-accel);
-      } else if (this.scene.keys.d.isDown) {
-        p1Body.setAccelerationX(accel);
-      } else {
-        p1Body.setAccelerationX(0);
-        p1Body.velocity.x *= 0.85;
-      }
-      p1Body.velocity.x = Phaser.Math.Clamp(p1Body.velocity.x, -maxSpeed, maxSpeed);
-    }
-
-    if (isArcadeBody(p2Body)) {
-      if (this.scene.cursors.up.isDown) {
-        p2Body.setAccelerationY(-accel);
-      } else if (this.scene.cursors.down.isDown) {
-        p2Body.setAccelerationY(accel);
-      } else {
-        p2Body.setAccelerationY(0);
-        p2Body.velocity.y *= 0.85;
-      }
-      p2Body.velocity.y = Phaser.Math.Clamp(p2Body.velocity.y, -maxSpeed, maxSpeed);
-
-      if (this.scene.cursors.left.isDown) {
-        p2Body.setAccelerationX(-accel);
-      } else if (this.scene.cursors.right.isDown) {
-        p2Body.setAccelerationX(accel);
-      } else {
-        p2Body.setAccelerationX(0);
-        p2Body.velocity.x *= 0.85;
-      }
-      p2Body.velocity.x = Phaser.Math.Clamp(p2Body.velocity.x, -maxSpeed, maxSpeed);
-    }
-
-    this.p1.y = Phaser.Math.Clamp(this.p1.y, 110, 490);
-    this.p1.x = Phaser.Math.Clamp(this.p1.x, 85, 390);
-    this.p2.y = Phaser.Math.Clamp(this.p2.y, 110, 490);
-    this.p2.x = Phaser.Math.Clamp(this.p2.x, 410, 715);
-
-    if (this.ball.y < 85) {
-      if (this.ball.body !== null) {
-        this.ball.body.velocity.y = Math.abs(this.ball.body.velocity.y);
-      }
-      this.ball.y = 86;
-      this.createBounceEffect(this.ball.x, 80);
-    }
-    if (this.ball.y > 515) {
-      if (this.ball.body !== null) {
-        this.ball.body.velocity.y = -Math.abs(this.ball.body.velocity.y);
-      }
-      this.ball.y = 514;
-      this.createBounceEffect(this.ball.x, 520);
-    }
-
-    const hitRange = 35;
-    const paddleHitZone = 45;
-
-    if (
-      Math.abs(this.ball.x - this.p1.x) < hitRange &&
-      Math.abs(this.ball.y - this.p1.y) < paddleHitZone
-    ) {
-      const ballVelX = this.ball.body?.velocity.x ?? 0;
-      if (ballVelX < 0) {
-        const spin = (this.p1.body?.velocity.y ?? 0) * 0.5;
-        const speedBoost = 35 + this.rallyCount * 2;
-        if (this.ball.body !== null) {
-          this.ball.body.velocity.x = Math.abs(this.ball.body.velocity.x) + speedBoost;
-          this.ball.body.velocity.y += spin + Phaser.Math.Between(-40, 40);
-        }
-        this.hitCount++;
-        this.rallyCount++;
-        this.onBallHit(1);
-      }
-    }
-
-    if (
-      Math.abs(this.ball.x - this.p2.x) < hitRange &&
-      Math.abs(this.ball.y - this.p2.y) < paddleHitZone
-    ) {
-      const ballVelX = this.ball.body?.velocity.x ?? 0;
-      if (ballVelX > 0) {
-        const spin = (this.p2.body?.velocity.y ?? 0) * 0.5;
-        const speedBoost = 35 + this.rallyCount * 2;
-        if (this.ball.body !== null) {
-          this.ball.body.velocity.x = -Math.abs(this.ball.body.velocity.x) - speedBoost;
-          this.ball.body.velocity.y += spin + Phaser.Math.Between(-40, 40);
-        }
-        this.hitCount++;
-        this.rallyCount++;
-        this.onBallHit(2);
-      }
-    }
-
-    this.updateBallTrail();
-
-    if (!this.justScored) {
-      if (this.ball.x < 30) {
-        this.scorePoint(2);
-      }
-      if (this.ball.x > 770) {
-        this.scorePoint(1);
-      }
-    }
-
-    const ballVelX = this.ball.body?.velocity.x ?? 0;
-    const ballVelY = this.ball.body?.velocity.y ?? 0;
-    const ballSpeed = Math.sqrt(ballVelX ** 2 + ballVelY ** 2);
-    this.ball.rotation += (ballSpeed / 800) * (delta / 16);
-  }
-
-  private createBounceEffect(x: number, y: number): void {
-    for (let i = 0; i < 3; i++) {
-      const particle = this.scene.add.circle(x + Phaser.Math.Between(-10, 10), y, 3, 0xff6600, 0.8);
-      this.scene.tweens.add({
-        targets: particle,
-        y: y + (y < 300 ? 20 : -20),
-        alpha: 0,
-        scale: 0.2,
-        duration: 200,
-        onComplete: () => {
-          particle.destroy();
-        },
-      });
-    }
-  }
-
-  private updateBallTrail(): void {
-    if (this.ball === null || this.ballTrailGraphics === null) {
-      return;
-    }
-
-    this.ballTrail.push({ x: this.ball.x, y: this.ball.y, alpha: 0.6 });
-
-    if (this.ballTrail.length > 8) {
-      this.ballTrail.shift();
-    }
-
-    this.ballTrailGraphics.clear();
-    for (let i = 0; i < this.ballTrail.length; i++) {
-      const point = this.ballTrail[i];
-      if (point !== undefined) {
-        const alpha = (i / this.ballTrail.length) * 0.4;
-        const size = 4 + (i / this.ballTrail.length) * 4;
-        this.ballTrailGraphics.fillStyle(0xff6600, alpha);
-        this.ballTrailGraphics.fillCircle(point.x, point.y, size);
-      }
-    }
-  }
-
-  private onBallHit(playerNum: 1 | 2): void {
-    if (this.ball === null || this.p1 === null || this.p2 === null) {
-      return;
-    }
-
-    this.scene.cameras.main.shake(50, 0.004);
-    const ballVelX = this.ball.body?.velocity.x ?? 0;
-    const ballVelY = this.ball.body?.velocity.y ?? 0;
-    const speed = Math.sqrt(ballVelX ** 2 + ballVelY ** 2);
-    const intensity = Math.min(speed / 900, 1);
-    const r = Math.floor(255 * intensity);
-    const b = Math.floor(255 * (1 - intensity));
-    this.ball.setTint(Phaser.Display.Color.GetColor(r, 100, b));
-
-    const paddle = playerNum === 1 ? this.p1 : this.p2;
-    paddle.setTint(0xffffff);
-    this.scene.time.delayedCall(100, () => {
-      paddle.clearTint();
-    });
-
-    if (this.rallyCount === 5) {
-      this.scene.showFloatingText(400, 250, '¡RALLY!', '#ffaa00');
-    } else if (this.rallyCount === 10) {
-      this.scene.showFloatingText(400, 250, '¡INCREÍBLE!', '#ff6600');
-    } else if (this.rallyCount === 15) {
-      this.scene.showFloatingText(400, 250, '¡ÉPICO!', '#ff0000');
-    }
-  }
-
-  private scorePoint(player: 1 | 2): void {
-    if (this.ball === null) {
-      return;
-    }
-
-    this.justScored = true;
-    if (player === 1) {
-      this.p1Score++;
-    } else {
-      this.p2Score++;
-    }
-
-    const bonusText = this.rallyCount >= 5 ? ` +${Math.floor(this.rallyCount / 5)} BONUS` : '';
-    if (this.rallyCount >= 5) {
-      if (player === 1) {
-        this.p1Score += Math.floor(this.rallyCount / 5);
-      } else {
-        this.p2Score += Math.floor(this.rallyCount / 5);
-      }
-    }
-
-    this.scene.showFloatingText(
-      this.ball.x,
-      this.ball.y,
-      '+1' + bonusText,
-      player === 1 ? '#00e5ff' : '#ff3d71'
-    );
-    this.scene.cameras.main.shake(120, 0.008);
-    this.scene.cameras.main.flash(
-      150,
-      player === 1 ? 0 : 255,
-      player === 1 ? 229 : 61,
-      player === 1 ? 255 : 113,
-      true
-    );
-
-    this.rallyCount = 0;
-
-    this.scene.time.delayedCall(1000, () => {
-      this.resetBall();
-      this.justScored = false;
-    });
-  }
-
-  private resetBall(): void {
-    if (this.ball === null) {
-      return;
-    }
-
-    this.ball.setPosition(400, 300);
-    const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
-    this.ball.setVelocity(250 * dir, Phaser.Math.Between(-120, 120));
-    this.ball.clearTint();
-    this.hitCount = 0;
-    this.rallyCount = 0;
-    this.ballTrail = [];
+    this.updatePaddles(delta);
+    this.updateBall(delta);
+    this.updateTrail();
+    this.checkScore();
   }
 
   public cleanup(): void {
-    this.ballTrailGraphics?.destroy();
-    this.ballTrailGraphics = null;
-    this.bg?.destroy();
-    this.bg = null;
-    this.ball?.destroy();
-    this.ball = null;
-    this.p1?.destroy();
-    this.p1 = null;
-    this.p2?.destroy();
-    this.p2 = null;
+    for (const obj of this.sceneObjects) {
+      this.engine.scene.remove(obj);
+    }
+    this.sceneObjects = [];
+    this.trailMeshes = [];
+    this.trailPositions = [];
   }
 
-  public get modeName(): 'pingpong' {
-    return 'pingpong';
+  private addToScene(obj: THREE.Object3D): void {
+    this.engine.scene.add(obj);
+    this.sceneObjects.push(obj);
+  }
+
+  private setupCamera(): void {
+    this.engine.camera.position.set(0, 8, 12);
+    this.engine.camera.lookAt(0, TABLE_Y, 0);
+  }
+
+  private createFloor(): void {
+    const geo = new THREE.PlaneGeometry(30, 30);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a2e,
+      roughness: 0.9,
+      metalness: 0.1,
+    });
+    const floor = new THREE.Mesh(geo, mat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+    floor.receiveShadow = true;
+    this.addToScene(floor);
+  }
+
+  private createTable(): void {
+    // Table surface
+    const tableGeo = new THREE.BoxGeometry(TABLE_WIDTH, 0.3, TABLE_DEPTH);
+    const tableMat = new THREE.MeshStandardMaterial({
+      color: 0x006633,
+      roughness: 0.4,
+      metalness: 0.05,
+    });
+    const table = new THREE.Mesh(tableGeo, tableMat);
+    table.position.y = TABLE_Y;
+    table.receiveShadow = true;
+    table.castShadow = true;
+    this.addToScene(table);
+
+    // White edge lines
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+
+    // Long edges (along X)
+    for (const zSide of [-1, 1]) {
+      const edgeGeo = new THREE.BoxGeometry(TABLE_WIDTH, 0.02, 0.05);
+      const edge = new THREE.Mesh(edgeGeo, lineMat);
+      edge.position.set(0, TABLE_Y + 0.16, zSide * (TABLE_DEPTH / 2));
+      this.addToScene(edge);
+    }
+
+    // Short edges (along Z)
+    for (const xSide of [-1, 1]) {
+      const edgeGeo = new THREE.BoxGeometry(0.05, 0.02, TABLE_DEPTH);
+      const edge = new THREE.Mesh(edgeGeo, lineMat);
+      edge.position.set(xSide * (TABLE_WIDTH / 2), TABLE_Y + 0.16, 0);
+      this.addToScene(edge);
+    }
+
+    // Center line (along Z)
+    const centerGeo = new THREE.BoxGeometry(0.03, 0.02, TABLE_DEPTH);
+    const centerLine = new THREE.Mesh(centerGeo, lineMat);
+    centerLine.position.set(0, TABLE_Y + 0.16, 0);
+    this.addToScene(centerLine);
+  }
+
+  private createNet(): void {
+    const netGeo = new THREE.BoxGeometry(0.05, 0.5, TABLE_DEPTH + 0.4);
+    const netMat = new THREE.MeshStandardMaterial({
+      color: 0xcccccc,
+      roughness: 0.6,
+      metalness: 0.2,
+      transparent: true,
+      opacity: 0.7,
+    });
+    const net = new THREE.Mesh(netGeo, netMat);
+    net.position.set(0, TABLE_Y + 0.4, 0);
+    net.castShadow = true;
+    this.addToScene(net);
+
+    // Net posts
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.3 });
+    for (const zSide of [-1, 1]) {
+      const postGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.7, 8);
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(0, TABLE_Y + 0.5, zSide * (TABLE_DEPTH / 2 + 0.2));
+      post.castShadow = true;
+      this.addToScene(post);
+    }
+  }
+
+  private createTableLegs(): void {
+    const legGeo = new THREE.CylinderGeometry(0.1, 0.1, TABLE_Y - 0.15, 8);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.3 });
+    const halfW = TABLE_WIDTH / 2 - 0.4;
+    const halfD = TABLE_DEPTH / 2 - 0.4;
+
+    for (const [lx, lz] of [[-halfW, -halfD], [-halfW, halfD], [halfW, -halfD], [halfW, halfD]]) {
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.position.set(lx, (TABLE_Y - 0.15) / 2, lz);
+      leg.castShadow = true;
+      this.addToScene(leg);
+    }
+  }
+
+  private createPaddles(): void {
+    const paddleGeo = new THREE.BoxGeometry(0.3, 0.8, 2);
+    const surfaceY = TABLE_Y + 0.15 + 0.4;
+
+    const matP1 = new THREE.MeshStandardMaterial({
+      color: COLORS.P1,
+      roughness: 0.3,
+      metalness: 0.1,
+      emissive: COLORS.P1,
+      emissiveIntensity: 0.15,
+    });
+    this.paddleP1 = new THREE.Mesh(paddleGeo, matP1);
+    this.paddleP1.position.set(-PADDLE_X, surfaceY, 0);
+    this.paddleP1.castShadow = true;
+    this.addToScene(this.paddleP1);
+
+    const matP2 = new THREE.MeshStandardMaterial({
+      color: COLORS.P2,
+      roughness: 0.3,
+      metalness: 0.1,
+      emissive: COLORS.P2,
+      emissiveIntensity: 0.15,
+    });
+    this.paddleP2 = new THREE.Mesh(paddleGeo, matP2);
+    this.paddleP2.position.set(PADDLE_X, surfaceY, 0);
+    this.paddleP2.castShadow = true;
+    this.addToScene(this.paddleP2);
+  }
+
+  private createBall(): void {
+    const geo = new THREE.SphereGeometry(BALL_RADIUS, 24, 24);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xff8800,
+      roughness: 0.25,
+      metalness: 0.1,
+      emissive: 0xff6600,
+      emissiveIntensity: 0.3,
+    });
+    this.ballMesh = new THREE.Mesh(geo, mat);
+    this.ballMesh.castShadow = true;
+    this.addToScene(this.ballMesh);
+  }
+
+  private createTrail(): void {
+    const geo = new THREE.SphereGeometry(BALL_RADIUS * 0.6, 8, 8);
+    for (let i = 0; i < TRAIL_COUNT; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xff8800,
+        transparent: true,
+        opacity: 0.3 * (1 - i / TRAIL_COUNT),
+        roughness: 0.5,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.visible = false;
+      this.addToScene(mesh);
+      this.trailMeshes.push(mesh);
+      this.trailPositions.push(new THREE.Vector3());
+    }
+  }
+
+  private resetBall(serveToward: 'P1' | 'P2' | null = null): void {
+    let direction: number;
+    if (serveToward === 'P1') {
+      direction = -1;
+    } else if (serveToward === 'P2') {
+      direction = 1;
+    } else {
+      direction = Math.random() < 0.5 ? -1 : 1;
+    }
+    const zAngle = (Math.random() - 0.5) * 0.8;
+
+    this.ballState = {
+      x: 0,
+      y: TABLE_Y + 0.15 + BALL_RADIUS,
+      z: 0,
+      vx: direction * Math.cos(zAngle),
+      vz: Math.sin(zAngle),
+      speed: BALL_START_SPEED,
+    };
+
+    // Normalize direction
+    const len = Math.sqrt(this.ballState.vx ** 2 + this.ballState.vz ** 2);
+    this.ballState.vx /= len;
+    this.ballState.vz /= len;
+
+    // Hide trail
+    for (const t of this.trailMeshes) {
+      t.visible = false;
+    }
+    for (const p of this.trailPositions) {
+      p.set(0, this.ballState.y, 0);
+    }
+  }
+
+  private updatePaddles(delta: number): void {
+    const input = this.engine.input;
+    const move = PADDLE_SPEED * delta;
+    const zMin = -(Z_BOUND - PADDLE_HALF_DEPTH);
+    const zMax = Z_BOUND - PADDLE_HALF_DEPTH;
+
+    // P1 paddle (up/down mapped to Z axis)
+    if (input.isDown(P1_CONTROLS.up)) {
+      this.paddleP1.position.z = Math.max(this.paddleP1.position.z - move, zMin);
+    }
+    if (input.isDown(P1_CONTROLS.down)) {
+      this.paddleP1.position.z = Math.min(this.paddleP1.position.z + move, zMax);
+    }
+
+    // P2 paddle
+    if (input.isDown(P2_CONTROLS.up)) {
+      this.paddleP2.position.z = Math.max(this.paddleP2.position.z - move, zMin);
+    }
+    if (input.isDown(P2_CONTROLS.down)) {
+      this.paddleP2.position.z = Math.min(this.paddleP2.position.z + move, zMax);
+    }
+  }
+
+  private updateBall(delta: number): void {
+    const bs = this.ballState;
+    bs.x += bs.vx * bs.speed * delta;
+    bs.z += bs.vz * bs.speed * delta;
+
+    // Bounce off top/bottom walls (Z limits)
+    if (bs.z <= -Z_BOUND) {
+      bs.z = -Z_BOUND;
+      bs.vz = Math.abs(bs.vz);
+    } else if (bs.z >= Z_BOUND) {
+      bs.z = Z_BOUND;
+      bs.vz = -Math.abs(bs.vz);
+    }
+
+    // Paddle collision P1 (left paddle at -PADDLE_X)
+    if (
+      bs.vx < 0 &&
+      bs.x - BALL_RADIUS <= -PADDLE_X + 0.15 &&
+      bs.x + BALL_RADIUS >= -PADDLE_X - 0.15 &&
+      bs.z >= this.paddleP1.position.z - PADDLE_HALF_DEPTH &&
+      bs.z <= this.paddleP1.position.z + PADDLE_HALF_DEPTH
+    ) {
+      bs.x = -PADDLE_X + 0.15 + BALL_RADIUS;
+      bs.vx = Math.abs(bs.vx);
+      this.applyPaddleDeflection(this.paddleP1);
+      this.accelerateBall();
+    }
+
+    // Paddle collision P2 (right paddle at +PADDLE_X)
+    if (
+      bs.vx > 0 &&
+      bs.x + BALL_RADIUS >= PADDLE_X - 0.15 &&
+      bs.x - BALL_RADIUS <= PADDLE_X + 0.15 &&
+      bs.z >= this.paddleP2.position.z - PADDLE_HALF_DEPTH &&
+      bs.z <= this.paddleP2.position.z + PADDLE_HALF_DEPTH
+    ) {
+      bs.x = PADDLE_X - 0.15 - BALL_RADIUS;
+      bs.vx = -Math.abs(bs.vx);
+      this.applyPaddleDeflection(this.paddleP2);
+      this.accelerateBall();
+    }
+
+    this.ballMesh.position.set(bs.x, bs.y, bs.z);
+  }
+
+  private applyPaddleDeflection(paddle: THREE.Mesh): void {
+    const bs = this.ballState;
+    const relativeZ = (bs.z - paddle.position.z) / PADDLE_HALF_DEPTH;
+    bs.vz = relativeZ * 0.8;
+
+    // Re-normalize direction
+    const len = Math.sqrt(bs.vx ** 2 + bs.vz ** 2);
+    if (len > 0) {
+      bs.vx /= len;
+      bs.vz /= len;
+    }
+  }
+
+  private accelerateBall(): void {
+    this.ballState.speed = Math.min(this.ballState.speed * BALL_SPEED_MULTIPLIER, BALL_MAX_SPEED);
+  }
+
+  private updateTrail(): void {
+    // Shift trail positions
+    for (let i = this.trailPositions.length - 1; i > 0; i--) {
+      this.trailPositions[i].copy(this.trailPositions[i - 1]);
+    }
+    if (this.trailPositions.length > 0) {
+      this.trailPositions[0].set(this.ballState.x, this.ballState.y, this.ballState.z);
+    }
+
+    for (let i = 0; i < this.trailMeshes.length; i++) {
+      const mesh = this.trailMeshes[i];
+      const pos = this.trailPositions[i];
+      if (pos) {
+        mesh.position.copy(pos);
+        mesh.visible = true;
+      }
+    }
+  }
+
+  private checkScore(): void {
+    const bs = this.ballState;
+
+    if (bs.x < -SCORE_X) {
+      // Ball passed P1's side → P2 scores
+      this.scoreP2++;
+      this.resetBall('P2');
+    } else if (bs.x > SCORE_X) {
+      // Ball passed P2's side → P1 scores
+      this.scoreP1++;
+      this.resetBall('P1');
+    }
   }
 }

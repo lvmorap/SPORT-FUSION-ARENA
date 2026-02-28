@@ -1,480 +1,494 @@
-import Phaser from 'phaser';
+import * as THREE from 'three';
 import { GameMode } from './GameMode';
-import type { GameScene, Checkpoint, TrackPoint, TrailPoint, CarCustomData } from '../types';
-import { isPointInPolygon, isArcadeBody } from '../utils/helpers';
+import { P1_CONTROLS, P2_CONTROLS, COLORS } from '../types';
 
-interface F1Car extends Phaser.Physics.Arcade.Image {
-  customData: CarCustomData;
+// Track geometry
+const TRACK_CENTER_RADIUS = 15;
+const TRACK_INNER_RADIUS = 12;
+const TRACK_OUTER_RADIUS = 18;
+const TRACK_WIDTH = TRACK_OUTER_RADIUS - TRACK_INNER_RADIUS;
+const TRACK_Y = 0.01;
+
+// Car physics
+const MAX_SPEED = 15;
+const ACCELERATION = 12;
+const BRAKE_DECEL = 18;
+const FRICTION = 4;
+const STEER_SPEED = 2.8;
+const PENALTY_SPEED_FACTOR = 0.3;
+const PENALTY_DURATION = 3;
+
+// Starting grid
+const START_LINE_LANE_OFFSET = 1.2;
+
+// Checkpoints (4 evenly spaced around the track)
+const CHECKPOINT_COUNT = 4;
+const CHECKPOINT_ANGLES: number[] = [];
+for (let i = 0; i < CHECKPOINT_COUNT; i++) {
+  CHECKPOINT_ANGLES.push((i * Math.PI * 2) / CHECKPOINT_COUNT);
+}
+const CHECKPOINT_RADIUS = 2.5;
+
+// Camera
+const CAMERA_HEIGHT = 35;
+
+interface CarState {
+  x: number;
+  z: number;
+  angle: number;
+  speed: number;
+  nextCheckpoint: number;
+  penaltyTimer: number;
+  onTrack: boolean;
 }
 
 export class F1Mode extends GameMode {
-  private bg: Phaser.GameObjects.Image | null = null;
-  private trackGraphics: Phaser.GameObjects.Graphics | null = null;
-  private trailGraphics: Phaser.GameObjects.Graphics | null = null;
-  private lapText: Phaser.GameObjects.Text | null = null;
-  private speedText: Phaser.GameObjects.Text | null = null;
-
-  private trackPoints: TrackPoint[] = [
-    { x: 100, y: 120 },
-    { x: 400, y: 55 },
-    { x: 700, y: 120 },
-    { x: 760, y: 230 },
-    { x: 640, y: 300 },
-    { x: 740, y: 390 },
-    { x: 700, y: 520 },
-    { x: 400, y: 560 },
-    { x: 100, y: 520 },
-    { x: 50, y: 370 },
-    { x: 100, y: 230 },
-  ];
-
-  private checkpoints: Checkpoint[] = [
-    { x: 400, y: 70, r: 75, id: 'top' },
-    { x: 750, y: 300, r: 75, id: 'right' },
-    { x: 400, y: 555, r: 75, id: 'bottom' },
-    { x: 60, y: 370, r: 75, id: 'left' },
-  ];
-
-  private p1Car: F1Car | null = null;
-  private p2Car: F1Car | null = null;
-  private p1Trail: TrailPoint[] = [];
-  private p2Trail: TrailPoint[] = [];
-
-  private p1Checkpoints = new Set<string>();
-  private p2Checkpoints = new Set<string>();
-  private p1Laps = 0;
-  private p2Laps = 0;
-  private p1BestLap = Infinity;
-  private p2BestLap = Infinity;
-  private p1LapStartTime = 0;
-  private p2LapStartTime = 0;
-
-  private p1OffTrack = false;
-  private p2OffTrack = false;
-  private p1PenaltyTimer = 0;
-  private p2PenaltyTimer = 0;
-
-  private p1Boost = 0;
-  private p2Boost = 0;
-  private p1BoostActive = false;
-  private p2BoostActive = false;
-
-  public constructor(scene: GameScene) {
-    super(scene);
-  }
+  private sceneObjects: THREE.Object3D[] = [];
+  private carP1!: THREE.Group;
+  private carP2!: THREE.Group;
+  private stateP1: CarState = this.defaultCarState();
+  private stateP2: CarState = this.defaultCarState();
+  private penaltyLabelP1: THREE.Sprite | null = null;
+  private penaltyLabelP2: THREE.Sprite | null = null;
 
   public setup(): void {
-    this.bg = this.scene.add
-      .image(400, 300, 'bg_f1')
-      .setDisplaySize(800, 600)
-      .setAlpha(0.3)
-      .setDepth(-10);
+    this.scoreP1 = 0;
+    this.scoreP2 = 0;
+    this.engine.clearScene();
+    this.sceneObjects = [];
 
-    this.trackGraphics = this.scene.add.graphics();
-    this.drawTrack();
+    this.setupCamera();
+    this.addLighting(0xfff4e0);
+    this.createGrass();
+    this.createTrackSurface();
+    this.createKerbs();
+    this.createStartFinishLine();
+    this.createCheckpointMarkers();
+    this.carP1 = this.createCar(COLORS.P1);
+    this.carP2 = this.createCar(COLORS.P2);
+    this.addToScene(this.carP1);
+    this.addToScene(this.carP2);
 
-    this.trailGraphics = this.scene.add.graphics();
+    // Place cars at start line, side by side
+    this.stateP1 = this.defaultCarState();
+    this.stateP1.x = TRACK_CENTER_RADIUS;
+    this.stateP1.z = -START_LINE_LANE_OFFSET;
+    this.stateP1.angle = Math.PI / 2;
 
-    const p1CarBase = this.scene.physics.add.image(130, 140, 'p1_f1');
-    p1CarBase.setMaxVelocity(500, 500);
-    this.p1Car = p1CarBase as F1Car;
-    this.p1Car.customData = { speed: 0, angle: 0, driftAngle: 0 };
+    this.stateP2 = this.defaultCarState();
+    this.stateP2.x = TRACK_CENTER_RADIUS;
+    this.stateP2.z = START_LINE_LANE_OFFSET;
+    this.stateP2.angle = Math.PI / 2;
 
-    const p2CarBase = this.scene.physics.add.image(130, 180, 'p2_f1');
-    p2CarBase.setMaxVelocity(500, 500);
-    this.p2Car = p2CarBase as F1Car;
-    this.p2Car.customData = { speed: 0, angle: 0, driftAngle: 0 };
-
-    this.lapText = this.scene.add
-      .text(400, 560, 'P1: 0 vueltas | P2: 0 vueltas', {
-        fontSize: '16px',
-        fontFamily: 'Share Tech Mono, Courier New, monospace',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 2,
-      })
-      .setOrigin(0.5);
-
-    this.speedText = this.scene.add
-      .text(400, 580, '', {
-        fontSize: '12px',
-        fontFamily: 'Share Tech Mono, Courier New, monospace',
-        color: '#888888',
-      })
-      .setOrigin(0.5);
+    this.syncCarMesh(this.carP1, this.stateP1);
+    this.syncCarMesh(this.carP2, this.stateP2);
   }
 
-  private drawTrack(): void {
-    if (this.trackGraphics === null) {
-      return;
-    }
+  public update(delta: number): void {
+    if (!this.isActive) { return; }
 
-    this.trackGraphics.lineStyle(85, 0x333333, 1);
-    this.trackGraphics.beginPath();
-    this.trackGraphics.moveTo(100, 120);
-    this.trackGraphics.lineTo(400, 55);
-    this.trackGraphics.lineTo(700, 120);
-    this.trackGraphics.lineTo(760, 230);
-    this.trackGraphics.lineTo(640, 300);
-    this.trackGraphics.lineTo(740, 390);
-    this.trackGraphics.lineTo(700, 520);
-    this.trackGraphics.lineTo(400, 560);
-    this.trackGraphics.lineTo(100, 520);
-    this.trackGraphics.lineTo(50, 370);
-    this.trackGraphics.lineTo(100, 230);
-    this.trackGraphics.closePath();
-    this.trackGraphics.strokePath();
-
-    this.trackGraphics.lineStyle(4, 0xff0000, 0.6);
-    this.trackGraphics.beginPath();
-    this.trackGraphics.moveTo(100, 120);
-    this.trackGraphics.lineTo(400, 55);
-    this.trackGraphics.lineTo(700, 120);
-    this.trackGraphics.strokePath();
-
-    this.trackGraphics.lineStyle(2, 0xffffff, 0.4);
-    this.trackGraphics.beginPath();
-    this.trackGraphics.moveTo(100, 120);
-    this.trackGraphics.lineTo(400, 55);
-    this.trackGraphics.lineTo(700, 120);
-    this.trackGraphics.lineTo(760, 230);
-    this.trackGraphics.lineTo(640, 300);
-    this.trackGraphics.lineTo(740, 390);
-    this.trackGraphics.lineTo(700, 520);
-    this.trackGraphics.lineTo(400, 560);
-    this.trackGraphics.lineTo(100, 520);
-    this.trackGraphics.lineTo(50, 370);
-    this.trackGraphics.lineTo(100, 230);
-    this.trackGraphics.closePath();
-    this.trackGraphics.strokePath();
-
-    this.trackGraphics.lineStyle(8, 0xffffff, 1);
-    this.trackGraphics.lineBetween(100, 105, 100, 205);
-    this.trackGraphics.lineStyle(4, 0x000000, 1);
-    this.trackGraphics.lineBetween(100, 115, 100, 125);
-    this.trackGraphics.lineBetween(100, 135, 100, 145);
-    this.trackGraphics.lineBetween(100, 155, 100, 165);
-    this.trackGraphics.lineBetween(100, 175, 100, 185);
-  }
-
-  public update(time: number, delta: number): void {
-    if (
-      this.p1Car === null ||
-      this.p2Car === null ||
-      this.lapText === null ||
-      this.speedText === null
-    ) {
-      return;
-    }
-
-    this.updateCarPhysics(
-      this.p1Car,
-      this.scene.keys.a,
-      this.scene.keys.d,
-      this.scene.keys.w,
-      delta,
-      'p1'
-    );
-    this.updateCarPhysics(
-      this.p2Car,
-      this.scene.cursors.left,
-      this.scene.cursors.right,
-      this.scene.cursors.up,
-      delta,
-      'p2'
-    );
-
-    this.updateTrails();
-
-    this.checkLaps(this.p1Car, 'p1', time);
-    this.checkLaps(this.p2Car, 'p2', time);
-
-    this.lapText.setText(`P1: ${this.p1Laps} vueltas | P2: ${this.p2Laps} vueltas`);
-
-    const p1Speed = Math.round(this.p1Car.customData.speed);
-    const p2Speed = Math.round(this.p2Car.customData.speed);
-    this.speedText.setText(`P1: ${p1Speed} km/h | P2: ${p2Speed} km/h`);
-
-    this.p1Score = this.p1Laps * 100;
-    this.p2Score = this.p2Laps * 100;
-  }
-
-  private updateTrails(): void {
-    if (this.p1Car === null || this.p2Car === null || this.trailGraphics === null) {
-      return;
-    }
-
-    if (this.p1Car.customData.speed > 200) {
-      this.p1Trail.push({ x: this.p1Car.x, y: this.p1Car.y });
-      if (this.p1Trail.length > 15) {
-        this.p1Trail.shift();
-      }
-    }
-    if (this.p2Car.customData.speed > 200) {
-      this.p2Trail.push({ x: this.p2Car.x, y: this.p2Car.y });
-      if (this.p2Trail.length > 15) {
-        this.p2Trail.shift();
-      }
-    }
-
-    this.trailGraphics.clear();
-
-    for (let i = 0; i < this.p1Trail.length; i++) {
-      const point = this.p1Trail[i];
-      if (point !== undefined) {
-        const alpha = (i / this.p1Trail.length) * 0.5;
-        const size = 2 + (i / this.p1Trail.length) * 3;
-        this.trailGraphics.fillStyle(0x00e5ff, alpha);
-        this.trailGraphics.fillCircle(point.x, point.y, size);
-      }
-    }
-
-    for (let i = 0; i < this.p2Trail.length; i++) {
-      const point = this.p2Trail[i];
-      if (point !== undefined) {
-        const alpha = (i / this.p2Trail.length) * 0.5;
-        const size = 2 + (i / this.p2Trail.length) * 3;
-        this.trailGraphics.fillStyle(0xff3d71, alpha);
-        this.trailGraphics.fillCircle(point.x, point.y, size);
-      }
-    }
-  }
-
-  private updateCarPhysics(
-    car: F1Car,
-    leftKey: Phaser.Input.Keyboard.Key,
-    rightKey: Phaser.Input.Keyboard.Key,
-    boostKey: Phaser.Input.Keyboard.Key,
-    delta: number,
-    player: 'p1' | 'p2'
-  ): void {
-    const cd = car.customData;
-    const isOffTrack = player === 'p1' ? this.p1OffTrack : this.p2OffTrack;
-    const isBoostActive = player === 'p1' ? this.p1BoostActive : this.p2BoostActive;
-
-    const baseMaxSpeed = isOffTrack ? 100 : 380;
-    const boostMaxSpeed = 480;
-    const maxSpeed = isBoostActive ? boostMaxSpeed : baseMaxSpeed;
-    const acceleration = isOffTrack ? 100 : 220;
-    const deceleration = isOffTrack ? 50 : 30;
-
-    if (cd.speed < maxSpeed) {
-      cd.speed += acceleration * (delta / 1000);
-    } else {
-      cd.speed -= deceleration * (delta / 1000);
-    }
-    cd.speed = Math.max(0, cd.speed);
-
-    if (!isOffTrack) {
-      if (player === 'p1') {
-        this.p1Boost = Math.min(100, this.p1Boost + delta * 0.02);
-      } else {
-        this.p2Boost = Math.min(100, this.p2Boost + delta * 0.02);
-      }
-    }
-
-    const currentBoost = player === 'p1' ? this.p1Boost : this.p2Boost;
-    if (boostKey.isDown && currentBoost > 20 && !isOffTrack) {
-      if (player === 'p1') {
-        this.p1BoostActive = true;
-        this.p1Boost -= delta * 0.05;
-      } else {
-        this.p2BoostActive = true;
-        this.p2Boost -= delta * 0.05;
-      }
-      car.setTint(player === 'p1' ? 0x00ffff : 0xff6688);
-    } else {
-      if (player === 'p1') {
-        this.p1BoostActive = false;
-      } else {
-        this.p2BoostActive = false;
-      }
-      if (!isOffTrack) {
-        car.clearTint();
-      }
-    }
-
-    const speedFactor = 1 - (cd.speed / 500) * 0.3;
-    const turnRate = 2.8 * speedFactor;
-
-    if (leftKey.isDown) {
-      cd.angle -= turnRate * (delta / 1000);
-      cd.driftAngle = Math.min(0.1, cd.driftAngle + 0.01);
-    } else if (rightKey.isDown) {
-      cd.angle += turnRate * (delta / 1000);
-      cd.driftAngle = Math.min(0.1, cd.driftAngle + 0.01);
-    } else {
-      cd.driftAngle *= 0.9;
-    }
-
-    const effectiveAngle = cd.angle + cd.driftAngle * (leftKey.isDown ? 1 : -1);
-    if (isArcadeBody(car.body)) {
-      car.body.setVelocity(
-        Math.cos(effectiveAngle) * cd.speed,
-        Math.sin(effectiveAngle) * cd.speed
-      );
-    }
-
-    car.setRotation(cd.angle + Math.PI / 2);
-
-    if (!isPointInPolygon(car.x, car.y, this.trackPoints)) {
-      const wasOffTrack = player === 'p1' ? this.p1OffTrack : this.p2OffTrack;
-      if (!wasOffTrack) {
-        if (player === 'p1') {
-          this.p1OffTrack = true;
-          this.p1PenaltyTimer = 2500;
-        } else {
-          this.p2OffTrack = true;
-          this.p2PenaltyTimer = 2500;
-        }
-        this.scene.cameras.main.shake(120, 0.008);
-        car.setTint(0xff0000);
-        this.scene.showFloatingText(car.x, car.y - 30, '¡FUERA!', '#ff0000');
-
-        for (let i = 0; i < 5; i++) {
-          const particle = this.scene.add.circle(
-            car.x + Phaser.Math.Between(-15, 15),
-            car.y + Phaser.Math.Between(-15, 15),
-            4,
-            0x8b4513,
-            0.8
-          );
-          this.scene.tweens.add({
-            targets: particle,
-            y: particle.y + 20,
-            alpha: 0,
-            duration: 400,
-            onComplete: () => {
-              particle.destroy();
-            },
-          });
-        }
-      }
-    }
-
-    const penaltyTimer = player === 'p1' ? this.p1PenaltyTimer : this.p2PenaltyTimer;
-    if (penaltyTimer > 0) {
-      if (player === 'p1') {
-        this.p1PenaltyTimer -= delta;
-        if (this.p1PenaltyTimer <= 0) {
-          this.p1OffTrack = false;
-          car.clearTint();
-        }
-      } else {
-        this.p2PenaltyTimer -= delta;
-        if (this.p2PenaltyTimer <= 0) {
-          this.p2OffTrack = false;
-          car.clearTint();
-        }
-      }
-    }
-
-    car.x = Phaser.Math.Clamp(car.x, 15, 785);
-    car.y = Phaser.Math.Clamp(car.y, 15, 585);
-  }
-
-  private checkLaps(car: F1Car, player: 'p1' | 'p2', time: number): void {
-    const checkpointsSet = player === 'p1' ? this.p1Checkpoints : this.p2Checkpoints;
-
-    for (const cp of this.checkpoints) {
-      const d = Phaser.Math.Distance.Between(car.x, car.y, cp.x, cp.y);
-      if (d < cp.r && !checkpointsSet.has(cp.id)) {
-        checkpointsSet.add(cp.id);
-
-        const checkpointNum = checkpointsSet.size;
-        if (checkpointNum < this.checkpoints.length) {
-          const isOffTrack = player === 'p1' ? this.p1OffTrack : this.p2OffTrack;
-          const isBoostActive = player === 'p1' ? this.p1BoostActive : this.p2BoostActive;
-          car.setTint(player === 'p1' ? 0x00ff88 : 0xff88aa);
-          this.scene.time.delayedCall(150, () => {
-            if (!isOffTrack && !isBoostActive) {
-              car.clearTint();
-            }
-          });
-        }
-
-        if (checkpointsSet.size === this.checkpoints.length) {
-          let isBestLap = false;
-          if (player === 'p1') {
-            this.p1Laps++;
-            this.p1Checkpoints.clear();
-            const lapTime = time - this.p1LapStartTime;
-            isBestLap = lapTime < this.p1BestLap;
-            if (isBestLap) {
-              this.p1BestLap = lapTime;
-            }
-            this.p1LapStartTime = time;
-          } else {
-            this.p2Laps++;
-            this.p2Checkpoints.clear();
-            const lapTime = time - this.p2LapStartTime;
-            isBestLap = lapTime < this.p2BestLap;
-            if (isBestLap) {
-              this.p2BestLap = lapTime;
-            }
-            this.p2LapStartTime = time;
-          }
-
-          const lapText = isBestLap ? '¡MEJOR VUELTA!' : '¡VUELTA!';
-          this.scene.showFloatingText(
-            car.x,
-            car.y - 20,
-            lapText,
-            player === 'p1' ? '#00e5ff' : '#ff3d71'
-          );
-          this.scene.cameras.main.shake(150, 0.01);
-          this.scene.cameras.main.flash(
-            100,
-            player === 'p1' ? 0 : 255,
-            player === 'p1' ? 229 : 61,
-            player === 'p1' ? 255 : 113,
-            true
-          );
-
-          for (let i = 0; i < 10; i++) {
-            const angle = (i / 10) * Math.PI * 2;
-            const particle = this.scene.add.circle(
-              car.x,
-              car.y,
-              5,
-              player === 'p1' ? 0x00e5ff : 0xff3d71,
-              1
-            );
-            this.scene.tweens.add({
-              targets: particle,
-              x: car.x + Math.cos(angle) * 50,
-              y: car.y + Math.sin(angle) * 50,
-              alpha: 0,
-              scale: 0.2,
-              duration: 500,
-              onComplete: () => {
-                particle.destroy();
-              },
-            });
-          }
-        }
-      }
-    }
+    this.updateCar(this.stateP1, P1_CONTROLS, delta);
+    this.updateCar(this.stateP2, P2_CONTROLS, delta);
+    this.checkTrackBounds(this.stateP1);
+    this.checkTrackBounds(this.stateP2);
+    this.updatePenalties(this.stateP1, delta);
+    this.updatePenalties(this.stateP2, delta);
+    this.checkCheckpoints(this.stateP1, 'P1');
+    this.checkCheckpoints(this.stateP2, 'P2');
+    this.syncCarMesh(this.carP1, this.stateP1);
+    this.syncCarMesh(this.carP2, this.stateP2);
+    this.updatePenaltyLabels();
   }
 
   public cleanup(): void {
-    this.trackGraphics?.destroy();
-    this.trackGraphics = null;
-    this.lapText?.destroy();
-    this.lapText = null;
-    this.speedText?.destroy();
-    this.speedText = null;
-    this.trailGraphics?.destroy();
-    this.trailGraphics = null;
-    this.bg?.destroy();
-    this.bg = null;
-    this.p1Car?.destroy();
-    this.p1Car = null;
-    this.p2Car?.destroy();
-    this.p2Car = null;
+    for (const obj of this.sceneObjects) {
+      this.engine.scene.remove(obj);
+    }
+    this.sceneObjects = [];
+    this.penaltyLabelP1 = null;
+    this.penaltyLabelP2 = null;
   }
 
-  public get modeName(): 'f1' {
-    return 'f1';
+  // --- Helpers ---
+
+  private addToScene(obj: THREE.Object3D): void {
+    this.engine.scene.add(obj);
+    this.sceneObjects.push(obj);
+  }
+
+  private defaultCarState(): CarState {
+    return {
+      x: TRACK_CENTER_RADIUS,
+      z: 0,
+      angle: Math.PI / 2,
+      speed: 0,
+      nextCheckpoint: 0,
+      penaltyTimer: 0,
+      onTrack: true,
+    };
+  }
+
+  private setupCamera(): void {
+    this.engine.camera.position.set(0, CAMERA_HEIGHT, 0);
+    this.engine.camera.lookAt(0, 0, 0);
+  }
+
+  // --- Environment ---
+
+  private createGrass(): void {
+    const geo = new THREE.PlaneGeometry(60, 60);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x2d7a2d,
+      roughness: 0.9,
+      metalness: 0,
+    });
+    const grass = new THREE.Mesh(geo, mat);
+    grass.rotation.x = -Math.PI / 2;
+    grass.position.y = 0;
+    grass.receiveShadow = true;
+    this.addToScene(grass);
+  }
+
+  private createTrackSurface(): void {
+    const shape = new THREE.Shape();
+    shape.absarc(0, 0, TRACK_OUTER_RADIUS, 0, Math.PI * 2, false);
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, TRACK_INNER_RADIUS, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+
+    const geo = new THREE.ShapeGeometry(shape, 64);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x333333,
+      roughness: 0.7,
+      metalness: 0.05,
+    });
+    const track = new THREE.Mesh(geo, mat);
+    track.rotation.x = -Math.PI / 2;
+    track.position.y = TRACK_Y;
+    track.receiveShadow = true;
+    this.addToScene(track);
+
+    // Center racing line (dashed circle at center radius)
+    this.createDashedCircle(TRACK_CENTER_RADIUS, 0xffffff, 0.08, TRACK_Y + 0.005);
+  }
+
+  private createDashedCircle(radius: number, color: number, lineWidth: number, y: number): void {
+    const segments = 60;
+    const dashRatio = 0.5;
+    for (let i = 0; i < segments; i++) {
+      if (i % 2 !== 0) { continue; }
+      const a1 = (i / segments) * Math.PI * 2;
+      const a2 = ((i + dashRatio) / segments) * Math.PI * 2;
+      const mid = (a1 + a2) / 2;
+      const arcLen = (a2 - a1) * radius;
+      const geo = new THREE.PlaneGeometry(arcLen, lineWidth);
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+      const dash = new THREE.Mesh(geo, mat);
+      dash.rotation.x = -Math.PI / 2;
+      dash.rotation.z = -mid;
+      dash.position.set(
+        Math.cos(mid) * radius,
+        y,
+        Math.sin(mid) * radius,
+      );
+      this.addToScene(dash);
+    }
+  }
+
+  private createKerbs(): void {
+    const segments = 48;
+    const kerbWidth = 0.5;
+    for (let i = 0; i < segments; i++) {
+      const a1 = (i / segments) * Math.PI * 2;
+      const a2 = ((i + 1) / segments) * Math.PI * 2;
+      const mid = (a1 + a2) / 2;
+      const color = i % 2 === 0 ? 0xff0000 : 0xffffff;
+      const arcLen = ((a2 - a1) * TRACK_INNER_RADIUS) + 0.02;
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+
+      // Inner kerb
+      const geoIn = new THREE.PlaneGeometry(arcLen, kerbWidth);
+      const kerbIn = new THREE.Mesh(geoIn, mat);
+      kerbIn.rotation.x = -Math.PI / 2;
+      kerbIn.rotation.z = -mid;
+      kerbIn.position.set(
+        Math.cos(mid) * (TRACK_INNER_RADIUS + kerbWidth / 2),
+        TRACK_Y + 0.005,
+        Math.sin(mid) * (TRACK_INNER_RADIUS + kerbWidth / 2),
+      );
+      this.addToScene(kerbIn);
+
+      // Outer kerb
+      const geoOut = new THREE.PlaneGeometry(
+        ((a2 - a1) * TRACK_OUTER_RADIUS) + 0.02,
+        kerbWidth,
+      );
+      const kerbOut = new THREE.Mesh(geoOut, mat);
+      kerbOut.rotation.x = -Math.PI / 2;
+      kerbOut.rotation.z = -mid;
+      kerbOut.position.set(
+        Math.cos(mid) * (TRACK_OUTER_RADIUS - kerbWidth / 2),
+        TRACK_Y + 0.005,
+        Math.sin(mid) * (TRACK_OUTER_RADIUS - kerbWidth / 2),
+      );
+      this.addToScene(kerbOut);
+    }
+  }
+
+  private createStartFinishLine(): void {
+    const geo = new THREE.PlaneGeometry(TRACK_WIDTH, 1.2);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+    const line = new THREE.Mesh(geo, mat);
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(TRACK_CENTER_RADIUS, TRACK_Y + 0.008, 0);
+    this.addToScene(line);
+
+    // Checkerboard pattern overlay
+    const tileSize = 0.3;
+    const cols = Math.floor(TRACK_WIDTH / tileSize);
+    const rows = Math.floor(1.2 / tileSize);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if ((r + c) % 2 === 0) { continue; }
+        const tGeo = new THREE.PlaneGeometry(tileSize, tileSize);
+        const tMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+        const tile = new THREE.Mesh(tGeo, tMat);
+        tile.rotation.x = -Math.PI / 2;
+        tile.position.set(
+          TRACK_INNER_RADIUS + tileSize / 2 + c * tileSize,
+          TRACK_Y + 0.01,
+          -1.2 / 2 + tileSize / 2 + r * tileSize,
+        );
+        this.addToScene(tile);
+      }
+    }
+  }
+
+  private createCheckpointMarkers(): void {
+    for (let i = 0; i < CHECKPOINT_COUNT; i++) {
+      const angle = CHECKPOINT_ANGLES[i];
+      const x = Math.cos(angle) * TRACK_CENTER_RADIUS;
+      const z = Math.sin(angle) * TRACK_CENTER_RADIUS;
+      const geo = new THREE.RingGeometry(0.3, 0.5, 16);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffff00,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.5,
+      });
+      const marker = new THREE.Mesh(geo, mat);
+      marker.rotation.x = -Math.PI / 2;
+      marker.position.set(x, TRACK_Y + 0.015, z);
+      this.addToScene(marker);
+    }
+  }
+
+  // --- Car creation ---
+
+  private createCar(color: number): THREE.Group {
+    const group = new THREE.Group();
+
+    // Main body
+    const bodyGeo = new THREE.BoxGeometry(1.2, 0.3, 0.7);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.25,
+      metalness: 0.4,
+      emissive: color,
+      emissiveIntensity: 0.15,
+    });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.25;
+    body.castShadow = true;
+    group.add(body);
+
+    // Cabin
+    const cabinGeo = new THREE.BoxGeometry(0.5, 0.25, 0.5);
+    const cabinMat = new THREE.MeshStandardMaterial({
+      color: 0x222222,
+      roughness: 0.3,
+      metalness: 0.2,
+    });
+    const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+    cabin.position.set(-0.1, 0.52, 0);
+    cabin.castShadow = true;
+    group.add(cabin);
+
+    // Wheels (4 cylinders)
+    const wheelGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.1, 12);
+    const wheelMat = new THREE.MeshStandardMaterial({
+      color: 0x111111,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const wheelPositions = [
+      [0.4, 0.12, 0.4],
+      [0.4, 0.12, -0.4],
+      [-0.4, 0.12, 0.4],
+      [-0.4, 0.12, -0.4],
+    ];
+    for (const [wx, wy, wz] of wheelPositions) {
+      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(wx, wy, wz);
+      wheel.castShadow = true;
+      group.add(wheel);
+    }
+
+    // Front wing (nose)
+    const wingGeo = new THREE.BoxGeometry(0.15, 0.06, 0.8);
+    const wingMat = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.3,
+      metalness: 0.3,
+    });
+    const frontWing = new THREE.Mesh(wingGeo, wingMat);
+    frontWing.position.set(0.65, 0.18, 0);
+    group.add(frontWing);
+
+    // Rear wing
+    const rearWingGeo = new THREE.BoxGeometry(0.08, 0.2, 0.7);
+    const rearWing = new THREE.Mesh(rearWingGeo, wingMat);
+    rearWing.position.set(-0.6, 0.45, 0);
+    group.add(rearWing);
+
+    return group;
+  }
+
+  // --- Car update ---
+
+  private updateCar(
+    state: CarState,
+    controls: { up: string; down: string; left: string; right: string },
+    delta: number,
+  ): void {
+    const input = this.engine.input;
+    const effectiveMax = state.penaltyTimer > 0 ? MAX_SPEED * PENALTY_SPEED_FACTOR : MAX_SPEED;
+
+    // Acceleration / braking
+    if (input.isDown(controls.up)) {
+      state.speed += ACCELERATION * delta;
+    } else if (input.isDown(controls.down)) {
+      state.speed -= BRAKE_DECEL * delta;
+    } else {
+      // Natural friction
+      if (state.speed > 0) {
+        state.speed = Math.max(0, state.speed - FRICTION * delta);
+      } else if (state.speed < 0) {
+        state.speed = Math.min(0, state.speed + FRICTION * delta);
+      }
+    }
+
+    // Clamp speed
+    state.speed = Math.max(-effectiveMax * 0.4, Math.min(effectiveMax, state.speed));
+
+    // Steering (only when moving)
+    if (Math.abs(state.speed) > 0.5) {
+      const steerFactor = Math.min(Math.abs(state.speed) / MAX_SPEED, 1);
+      if (input.isDown(controls.left)) {
+        state.angle += STEER_SPEED * steerFactor * delta;
+      }
+      if (input.isDown(controls.right)) {
+        state.angle -= STEER_SPEED * steerFactor * delta;
+      }
+    }
+
+    // Move car
+    state.x += Math.cos(state.angle) * state.speed * delta;
+    state.z -= Math.sin(state.angle) * state.speed * delta;
+  }
+
+  private checkTrackBounds(state: CarState): void {
+    const dist = Math.sqrt(state.x * state.x + state.z * state.z);
+    state.onTrack = dist >= TRACK_INNER_RADIUS && dist <= TRACK_OUTER_RADIUS;
+    if (!state.onTrack && state.penaltyTimer <= 0) {
+      state.penaltyTimer = PENALTY_DURATION;
+    }
+  }
+
+  private updatePenalties(state: CarState, delta: number): void {
+    if (state.penaltyTimer > 0) {
+      state.penaltyTimer = Math.max(0, state.penaltyTimer - delta);
+    }
+  }
+
+  private checkCheckpoints(state: CarState, player: 'P1' | 'P2'): void {
+    const cpAngle = CHECKPOINT_ANGLES[state.nextCheckpoint];
+    const cpX = Math.cos(cpAngle) * TRACK_CENTER_RADIUS;
+    const cpZ = Math.sin(cpAngle) * TRACK_CENTER_RADIUS;
+    const dx = state.x - cpX;
+    const dz = state.z - cpZ;
+    const distSq = dx * dx + dz * dz;
+
+    if (distSq < CHECKPOINT_RADIUS * CHECKPOINT_RADIUS) {
+      state.nextCheckpoint++;
+      if (state.nextCheckpoint >= CHECKPOINT_COUNT) {
+        // Completed a lap
+        state.nextCheckpoint = 0;
+        if (player === 'P1') {
+          this.scoreP1++;
+        } else {
+          this.scoreP2++;
+        }
+      }
+    }
+  }
+
+  private syncCarMesh(mesh: THREE.Group, state: CarState): void {
+    mesh.position.set(state.x, 0, state.z);
+    mesh.rotation.y = state.angle;
+  }
+
+  // --- Penalty labels ---
+
+  private updatePenaltyLabels(): void {
+    this.penaltyLabelP1 = this.updatePenaltyLabel(
+      this.penaltyLabelP1,
+      this.stateP1,
+      this.carP1,
+    );
+    this.penaltyLabelP2 = this.updatePenaltyLabel(
+      this.penaltyLabelP2,
+      this.stateP2,
+      this.carP2,
+    );
+  }
+
+  private updatePenaltyLabel(
+    existing: THREE.Sprite | null,
+    state: CarState,
+    car: THREE.Group,
+  ): THREE.Sprite | null {
+    if (state.penaltyTimer > 0) {
+      if (!existing) {
+        existing = this.createTextSprite('PENALTY', COLORS.DANGER);
+        this.addToScene(existing);
+      }
+      existing.position.set(car.position.x, 2.2, car.position.z);
+      existing.visible = true;
+    } else if (existing) {
+      existing.visible = false;
+    }
+    return existing;
+  }
+
+  private createTextSprite(text: string, color: number): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.font = 'bold 36px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const hex = '#' + new THREE.Color(color).getHexString();
+      ctx.fillStyle = hex;
+      ctx.fillText(text, 128, 32);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(3, 0.75, 1);
+    return sprite;
   }
 }

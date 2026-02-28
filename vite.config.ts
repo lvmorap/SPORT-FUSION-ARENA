@@ -12,7 +12,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          phaser: ['phaser'],
+          three: ['three'],
+          cannon: ['cannon-es'],
         },
       },
     },

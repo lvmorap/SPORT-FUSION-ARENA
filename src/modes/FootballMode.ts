@@ -1,313 +1,409 @@
-import Phaser from 'phaser';
+import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
 import { GameMode } from './GameMode';
-import type { GameScene, Goal } from '../types';
-import { createImpactParticles, isArcadeBody } from '../utils/helpers';
+import { P1_CONTROLS, P2_CONTROLS, COLORS } from '../types';
 
 export class FootballMode extends GameMode {
-  private bg: Phaser.GameObjects.Image | null = null;
-  private ball: Phaser.Physics.Arcade.Image | null = null;
-  private p1: Phaser.Physics.Arcade.Image | null = null;
-  private p2: Phaser.Physics.Arcade.Image | null = null;
-  private goal1: Goal = { x: 80, y: 300, width: 18, height: 100, speed: 100, dir: 1 };
-  private goal2: Goal = { x: 720, y: 300, width: 18, height: 100, speed: 100, dir: -1 };
-  private goalGraphics: Phaser.GameObjects.Graphics | null = null;
-  private particleGraphics: Phaser.GameObjects.Graphics | null = null;
-  private justScored = false;
+  // Players
+  private p1Mesh!: THREE.Group;
+  private p2Mesh!: THREE.Group;
+  private p1Body!: CANNON.Body;
+  private p2Body!: CANNON.Body;
 
-  public constructor(scene: GameScene) {
-    super(scene);
-  }
+  // Ball
+  private ballMesh!: THREE.Mesh;
+  private ballBody!: CANNON.Body;
+
+  // Goals
+  private goal1Group!: THREE.Group;
+  private goal2Group!: THREE.Group;
+
+  // Field objects
+  private fieldMesh!: THREE.Mesh;
+  private fieldLines: THREE.Object3D[] = [];
+  private wallBodies: CANNON.Body[] = [];
+  private wallMeshes: THREE.Object3D[] = [];
+
+  // Goal animation
+  private goalTime = 0;
+  private readonly goalOscillationSpeed = 1.2;
+  private readonly goalOscillationAmplitude = 5;
+  private readonly goalHalfWidth = 3;
+
+  // Goal scoring
+  private goalCooldown = false;
+  private goalResetTimer: ReturnType<typeof setTimeout> | null = null;
+  private flashOverlay!: THREE.Mesh;
+
+  // Ground physics
+  private groundBody!: CANNON.Body;
+
+  private readonly FIELD_WIDTH = 30;
+  private readonly FIELD_DEPTH = 20;
+  private readonly PLAYER_SPEED = 60;
+  private readonly BALL_RADIUS = 0.3;
+  private readonly GOAL_LINE_X = 14;
 
   public setup(): void {
-    this.bg = this.scene.add
-      .image(400, 300, 'bg_football')
-      .setDisplaySize(800, 600)
-      .setAlpha(0.35)
-      .setDepth(-10);
+    this.scoreP1 = 0;
+    this.scoreP2 = 0;
+    this.goalTime = 0;
+    this.goalCooldown = false;
 
-    const g = this.scene.add.graphics();
-    g.lineStyle(2, 0xffffff, 0.6);
-    g.strokeRect(60, 40, 680, 520);
-    g.lineBetween(400, 40, 400, 560);
-    g.strokeCircle(400, 300, 70);
-
-    g.lineStyle(2, 0xffffff, 0.4);
-    g.beginPath();
-    g.arc(60, 40, 20, 0, Math.PI / 2);
-    g.strokePath();
-    g.beginPath();
-    g.arc(740, 40, 20, Math.PI / 2, Math.PI);
-    g.strokePath();
-    g.beginPath();
-    g.arc(60, 560, 20, -Math.PI / 2, 0);
-    g.strokePath();
-    g.beginPath();
-    g.arc(740, 560, 20, Math.PI, -Math.PI / 2);
-    g.strokePath();
-
-    this.ball = this.scene.physics.add.image(400, 300, 'ball_football');
-    this.ball.setBounce(0.85);
-    this.ball.setMaxVelocity(700, 700);
-    this.ball.setCollideWorldBounds(true);
-    this.ball.setDrag(30);
-    this.ball.setMass(0.8);
-
-    this.p1 = this.scene.physics.add.image(200, 300, 'p1_football');
-    this.p2 = this.scene.physics.add.image(600, 300, 'p2_football');
-    this.p1.setCollideWorldBounds(true);
-    this.p2.setCollideWorldBounds(true);
-    this.p1.setBounce(0.4);
-    this.p2.setBounce(0.4);
-    if (isArcadeBody(this.p1.body)) {
-      this.p1.body.setDrag(350);
-    }
-    if (isArcadeBody(this.p2.body)) {
-      this.p2.body.setDrag(350);
-    }
-    this.p1.setMass(1.2);
-    this.p2.setMass(1.2);
-
-    this.scene.physics.add.collider(this.ball, this.p1, () => {
-      this.onBallHit(1);
-    });
-    this.scene.physics.add.collider(this.ball, this.p2, () => {
-      this.onBallHit(2);
-    });
-    this.scene.physics.add.collider(this.p1, this.p2, () => {
-      this.onPlayerCollision();
-    });
-
-    this.goalGraphics = this.scene.add.graphics();
-    this.particleGraphics = this.scene.add.graphics();
+    this.setupCamera();
+    this.addLighting(0x88ff88);
+    this.createField();
+    this.createFieldLines();
+    this.createWalls();
+    this.createGoals();
+    this.createPlayers();
+    this.createBall();
+    this.createFlashOverlay();
+    this.createGround();
   }
 
-  private onBallHit(playerNum: 1 | 2): void {
-    if (this.ball === null || this.p1 === null || this.p2 === null) {
-      return;
-    }
+  public update(delta: number): void {
+    if (!this.isActive) {return;}
 
-    const player = playerNum === 1 ? this.p1 : this.p2;
-    const kickMultiplier = 1.3;
-    const playerVelX = player.body?.velocity.x ?? 0;
-    const playerVelY = player.body?.velocity.y ?? 0;
+    this.goalTime += delta;
 
-    if (this.ball.body !== null) {
-      this.ball.body.velocity.x += playerVelX * kickMultiplier;
-      this.ball.body.velocity.y += playerVelY * kickMultiplier;
-    }
+    // Player movement
+    this.handlePlayerMovement(this.p1Body, P1_CONTROLS, this.PLAYER_SPEED);
+    this.handlePlayerMovement(this.p2Body, P2_CONTROLS, this.PLAYER_SPEED);
 
-    this.scene.cameras.main.shake(50, 0.004);
-    this.ball.setTint(playerNum === 1 ? 0x00e5ff : 0xff3d71);
-    this.scene.time.delayedCall(100, () => {
-      this.ball?.clearTint();
-    });
+    // Keep players on ground
+    this.p1Body.position.y = 0.6;
+    this.p2Body.position.y = 0.6;
+    this.p1Body.velocity.y = 0;
+    this.p2Body.velocity.y = 0;
 
-    createImpactParticles(
-      this.scene,
-      this.ball.x,
-      this.ball.y,
-      playerNum === 1 ? 0x00e5ff : 0xff3d71
-    );
-  }
+    // Oscillate goals along Z axis
+    const goalZ = Math.sin(this.goalTime * this.goalOscillationSpeed) * this.goalOscillationAmplitude;
+    this.goal1Group.position.z = goalZ;
+    this.goal2Group.position.z = goalZ;
 
-  private onPlayerCollision(): void {
-    this.scene.cameras.main.shake(80, 0.006);
-  }
+    // Sync physics
+    this.engine.syncPhysics();
 
-  public update(_time: number, delta: number): void {
-    if (this.p1 === null || this.p2 === null || this.ball === null) {
-      return;
-    }
-
-    const speed = 300;
-    const accel = 1200;
-    const p1Body = this.p1.body;
-    const p2Body = this.p2.body;
-
-    if (isArcadeBody(p1Body)) {
-      if (this.scene.keys.w.isDown) {
-        p1Body.setAccelerationY(-accel);
-      } else if (this.scene.keys.s.isDown) {
-        p1Body.setAccelerationY(accel);
-      } else {
-        p1Body.setAccelerationY(0);
-      }
-
-      if (this.scene.keys.a.isDown) {
-        p1Body.setAccelerationX(-accel);
-      } else if (this.scene.keys.d.isDown) {
-        p1Body.setAccelerationX(accel);
-      } else {
-        p1Body.setAccelerationX(0);
-      }
-
-      p1Body.velocity.x = Phaser.Math.Clamp(p1Body.velocity.x, -speed, speed);
-      p1Body.velocity.y = Phaser.Math.Clamp(p1Body.velocity.y, -speed, speed);
-    }
-
-    if (isArcadeBody(p2Body)) {
-      if (this.scene.cursors.up.isDown) {
-        p2Body.setAccelerationY(-accel);
-      } else if (this.scene.cursors.down.isDown) {
-        p2Body.setAccelerationY(accel);
-      } else {
-        p2Body.setAccelerationY(0);
-      }
-
-      if (this.scene.cursors.left.isDown) {
-        p2Body.setAccelerationX(-accel);
-      } else if (this.scene.cursors.right.isDown) {
-        p2Body.setAccelerationX(accel);
-      } else {
-        p2Body.setAccelerationX(0);
-      }
-
-      p2Body.velocity.x = Phaser.Math.Clamp(p2Body.velocity.x, -speed, speed);
-      p2Body.velocity.y = Phaser.Math.Clamp(p2Body.velocity.y, -speed, speed);
-    }
-
-    const ballVelX = this.ball.body?.velocity.x ?? 0;
-    const ballVelY = this.ball.body?.velocity.y ?? 0;
-    const ballSpeed = Math.sqrt(ballVelX ** 2 + ballVelY ** 2);
-    this.ball.rotation += (ballSpeed / 500) * (delta / 16);
-
-    this.updateGoals(delta);
-    this.checkGoal();
-  }
-
-  private updateGoals(delta: number): void {
-    if (this.goalGraphics === null) {
-      return;
-    }
-
-    this.goal1.y += this.goal1.speed * this.goal1.dir * (delta / 1000);
-    this.goal2.y += this.goal2.speed * this.goal2.dir * (delta / 1000);
-
-    if (this.goal1.y < 120 || this.goal1.y > 480) {
-      this.goal1.dir *= -1;
-    }
-    if (this.goal2.y < 120 || this.goal2.y > 480) {
-      this.goal2.dir *= -1;
-    }
-
-    this.goalGraphics.clear();
-    this.goalGraphics.lineStyle(4, 0xffffff, 1);
-
-    const g1top = this.goal1.y - this.goal1.height / 2;
-    const g1bot = this.goal1.y + this.goal1.height / 2;
-    this.goalGraphics.lineBetween(this.goal1.x - 9, g1top, this.goal1.x - 9, g1bot);
-    this.goalGraphics.lineBetween(this.goal1.x - 9, g1top, this.goal1.x + 9, g1top);
-    this.goalGraphics.lineBetween(this.goal1.x - 9, g1bot, this.goal1.x + 9, g1bot);
-
-    const g2top = this.goal2.y - this.goal2.height / 2;
-    const g2bot = this.goal2.y + this.goal2.height / 2;
-    this.goalGraphics.lineBetween(this.goal2.x + 9, g2top, this.goal2.x + 9, g2bot);
-    this.goalGraphics.lineBetween(this.goal2.x - 9, g2top, this.goal2.x + 9, g2top);
-    this.goalGraphics.lineBetween(this.goal2.x - 9, g2bot, this.goal2.x + 9, g2bot);
-  }
-
-  private checkGoal(): void {
-    if (this.justScored || this.ball === null) {
-      return;
-    }
-
-    const bx = this.ball.x;
-    const by = this.ball.y;
-    const bvx = this.ball.body?.velocity.x ?? 0;
-
-    if (bvx > 50 && bx > this.goal2.x - 20 && bx < this.goal2.x + 20) {
-      if (by > this.goal2.y - this.goal2.height / 2 && by < this.goal2.y + this.goal2.height / 2) {
-        this.scoreGoal(1);
+    // Keep ball on the ground plane
+    if (this.ballBody.position.y < this.BALL_RADIUS) {
+      this.ballBody.position.y = this.BALL_RADIUS;
+      if (this.ballBody.velocity.y < 0) {
+        this.ballBody.velocity.y = 0;
       }
     }
 
-    if (bvx < -50 && bx > this.goal1.x - 20 && bx < this.goal1.x + 20) {
-      if (by > this.goal1.y - this.goal1.height / 2 && by < this.goal1.y + this.goal1.height / 2) {
-        this.scoreGoal(2);
-      }
+    // Goal detection
+    this.checkGoals(goalZ);
+
+    // Fade flash overlay
+    const flashMat = this.flashOverlay.material as THREE.MeshBasicMaterial;
+    if (flashMat.opacity > 0) {
+      flashMat.opacity = Math.max(0, flashMat.opacity - delta * 3);
     }
-  }
-
-  private scoreGoal(player: 1 | 2): void {
-    if (this.ball === null) {
-      return;
-    }
-
-    if (player === 1) {
-      this.p1Score++;
-    } else {
-      this.p2Score++;
-    }
-
-    this.justScored = true;
-
-    this.scene.cameras.main.shake(300, 0.015);
-    this.scene.cameras.main.flash(
-      200,
-      player === 1 ? 0 : 255,
-      player === 1 ? 229 : 61,
-      player === 1 ? 255 : 113,
-      true
-    );
-
-    this.scene.showFloatingText(
-      this.ball.x,
-      this.ball.y,
-      '¡GOL!',
-      player === 1 ? '#00e5ff' : '#ff3d71'
-    );
-
-    const goalX = player === 1 ? this.goal2.x : this.goal1.x;
-    const goalY = player === 1 ? this.goal2.y : this.goal1.y;
-    for (let i = 0; i < 15; i++) {
-      const angle = (i / 15) * Math.PI * 2;
-      const dist = Phaser.Math.Between(20, 80);
-      const particle = this.scene.add.circle(
-        goalX,
-        goalY,
-        Phaser.Math.Between(3, 8),
-        player === 1 ? 0x00e5ff : 0xff3d71,
-        1
-      );
-      this.scene.tweens.add({
-        targets: particle,
-        x: goalX + Math.cos(angle) * dist,
-        y: goalY + Math.sin(angle) * dist,
-        alpha: 0,
-        scale: 0,
-        duration: 600,
-        ease: 'Power2',
-        onComplete: () => {
-          particle.destroy();
-        },
-      });
-    }
-
-    this.scene.time.delayedCall(1000, () => {
-      if (this.ball !== null && isArcadeBody(this.ball.body)) {
-        this.ball.setPosition(400, 300);
-        this.ball.body.setVelocity(0, 0);
-      }
-      this.justScored = false;
-    });
   }
 
   public cleanup(): void {
-    this.goalGraphics?.destroy();
-    this.goalGraphics = null;
-    this.particleGraphics?.destroy();
-    this.particleGraphics = null;
-    this.bg?.destroy();
-    this.bg = null;
-    this.ball?.destroy();
-    this.ball = null;
-    this.p1?.destroy();
-    this.p1 = null;
-    this.p2?.destroy();
-    this.p2 = null;
+    if (this.goalResetTimer !== null) {
+      clearTimeout(this.goalResetTimer);
+      this.goalResetTimer = null;
+    }
+    this.engine.clearScene();
+    this.fieldLines = [];
+    this.wallBodies = [];
+    this.wallMeshes = [];
   }
 
-  public get modeName(): 'football' {
-    return 'football';
+  // --- Setup helpers ---
+
+  private setupCamera(): void {
+    this.engine.camera.position.set(0, 28, 18);
+    this.engine.camera.lookAt(0, 0, 0);
+  }
+
+  private createField(): void {
+    const geo = new THREE.PlaneGeometry(this.FIELD_WIDTH, this.FIELD_DEPTH);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x1a6b1a,
+      roughness: 0.8,
+      metalness: 0.0,
+    });
+    this.fieldMesh = new THREE.Mesh(geo, mat);
+    this.fieldMesh.rotation.x = -Math.PI / 2;
+    this.fieldMesh.receiveShadow = true;
+    this.engine.scene.add(this.fieldMesh);
+  }
+
+  private createFieldLines(): void {
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    const createLine = (
+      width: number,
+      depth: number,
+      x: number,
+      z: number
+    ): THREE.Mesh => {
+      const geo = new THREE.PlaneGeometry(width, depth);
+      const mesh = new THREE.Mesh(geo, lineMat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(x, 0.01, z);
+      this.engine.scene.add(mesh);
+      this.fieldLines.push(mesh);
+      return mesh;
+    };
+
+    // Outer boundary
+    const hw = this.FIELD_WIDTH / 2;
+    const hd = this.FIELD_DEPTH / 2;
+    const t = 0.1; // line thickness
+
+    createLine(this.FIELD_WIDTH, t, 0, -hd); // top
+    createLine(this.FIELD_WIDTH, t, 0, hd);  // bottom
+    createLine(t, this.FIELD_DEPTH, -hw, 0); // left
+    createLine(t, this.FIELD_DEPTH, hw, 0);  // right
+
+    // Center line
+    createLine(t, this.FIELD_DEPTH, 0, 0);
+
+    // Center circle
+    const circleGeo = new THREE.RingGeometry(2.8, 3, 64);
+    const circleMesh = new THREE.Mesh(circleGeo, lineMat);
+    circleMesh.rotation.x = -Math.PI / 2;
+    circleMesh.position.y = 0.01;
+    this.engine.scene.add(circleMesh);
+    this.fieldLines.push(circleMesh);
+
+    // Goal area boxes
+    const goalAreaWidth = 5;
+    const goalAreaDepth = 8;
+    createLine(goalAreaWidth, t, -hw + goalAreaWidth / 2, -goalAreaDepth / 2);
+    createLine(goalAreaWidth, t, -hw + goalAreaWidth / 2, goalAreaDepth / 2);
+    createLine(t, goalAreaDepth, -hw + goalAreaWidth, 0);
+
+    createLine(goalAreaWidth, t, hw - goalAreaWidth / 2, -goalAreaDepth / 2);
+    createLine(goalAreaWidth, t, hw - goalAreaWidth / 2, goalAreaDepth / 2);
+    createLine(t, goalAreaDepth, hw - goalAreaWidth, 0);
+  }
+
+  private createWalls(): void {
+    const hw = this.FIELD_WIDTH / 2;
+    const hd = this.FIELD_DEPTH / 2;
+    const wallHeight = 2;
+    const wallThickness = 0.5;
+
+    const createWall = (
+      sx: number,
+      sy: number,
+      sz: number,
+      px: number,
+      py: number,
+      pz: number
+    ): void => {
+      const shape = new CANNON.Box(
+        new CANNON.Vec3(sx / 2, sy / 2, sz / 2)
+      );
+      const body = new CANNON.Body({ mass: 0, shape });
+      body.position.set(px, py, pz);
+      this.engine.world.addBody(body);
+      this.wallBodies.push(body);
+
+      // Invisible wall mesh
+      const geo = new THREE.BoxGeometry(sx, sy, sz);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x225522,
+        transparent: true,
+        opacity: 0.3,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(px, py, pz);
+      this.engine.scene.add(mesh);
+      this.wallMeshes.push(mesh);
+    };
+
+    // Top wall (z = -hd)
+    createWall(this.FIELD_WIDTH + wallThickness * 2, wallHeight, wallThickness,
+      0, wallHeight / 2, -hd - wallThickness / 2);
+    // Bottom wall (z = +hd)
+    createWall(this.FIELD_WIDTH + wallThickness * 2, wallHeight, wallThickness,
+      0, wallHeight / 2, hd + wallThickness / 2);
+    // Left wall (x = -hw)
+    createWall(wallThickness, wallHeight, this.FIELD_DEPTH,
+      -hw - wallThickness / 2, wallHeight / 2, 0);
+    // Right wall (x = +hw)
+    createWall(wallThickness, wallHeight, this.FIELD_DEPTH,
+      hw + wallThickness / 2, wallHeight / 2, 0);
+  }
+
+  private createGoals(): void {
+    this.goal1Group = this.buildGoal(COLORS.P2, -this.FIELD_WIDTH / 2);
+    this.goal2Group = this.buildGoal(COLORS.P1, this.FIELD_WIDTH / 2);
+  }
+
+  private buildGoal(color: number, xPos: number): THREE.Group {
+    const group = new THREE.Group();
+    const postHeight = 2.5;
+    const goalWidth = this.goalHalfWidth * 2;
+    const postRadius = 0.15;
+
+    const postMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.2,
+      metalness: 0.8,
+    });
+
+    const glowMat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 1.5,
+      roughness: 0.1,
+      metalness: 0.3,
+    });
+
+    // Left post
+    const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, postHeight, 12);
+    const leftPost = new THREE.Mesh(postGeo, postMat);
+    leftPost.position.set(0, postHeight / 2, -goalWidth / 2);
+    leftPost.castShadow = true;
+    group.add(leftPost);
+
+    // Right post
+    const rightPost = new THREE.Mesh(postGeo, postMat);
+    rightPost.position.set(0, postHeight / 2, goalWidth / 2);
+    rightPost.castShadow = true;
+    group.add(rightPost);
+
+    // Crossbar
+    const crossbarGeo = new THREE.CylinderGeometry(postRadius, postRadius, goalWidth, 12);
+    const crossbar = new THREE.Mesh(crossbarGeo, postMat);
+    crossbar.position.set(0, postHeight, 0);
+    crossbar.rotation.x = Math.PI / 2;
+    crossbar.castShadow = true;
+    group.add(crossbar);
+
+    // Neon glow outline - left post
+    const glowGeo = new THREE.CylinderGeometry(
+      postRadius + 0.08, postRadius + 0.08, postHeight + 0.1, 12
+    );
+    const leftGlow = new THREE.Mesh(glowGeo, glowMat);
+    leftGlow.position.copy(leftPost.position);
+    group.add(leftGlow);
+
+    // Neon glow outline - right post
+    const rightGlow = new THREE.Mesh(glowGeo, glowMat);
+    rightGlow.position.copy(rightPost.position);
+    group.add(rightGlow);
+
+    // Neon glow outline - crossbar
+    const crossGlowGeo = new THREE.CylinderGeometry(
+      postRadius + 0.08, postRadius + 0.08, goalWidth + 0.1, 12
+    );
+    const crossGlow = new THREE.Mesh(crossGlowGeo, glowMat);
+    crossGlow.position.copy(crossbar.position);
+    crossGlow.rotation.x = Math.PI / 2;
+    group.add(crossGlow);
+
+    // Net (simple plane behind the goal)
+    const netGeo = new THREE.PlaneGeometry(1.5, postHeight);
+    const netMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide,
+    });
+    const backNet = new THREE.Mesh(netGeo, netMat);
+    const netOffsetX = xPos < 0 ? -0.75 : 0.75;
+    backNet.position.set(netOffsetX, postHeight / 2, 0);
+    group.add(backNet);
+
+    group.position.set(xPos, 0, 0);
+    this.engine.scene.add(group);
+    return group;
+  }
+
+  private createPlayers(): void {
+    this.p1Mesh = this.createPlayerMesh(COLORS.P1);
+    this.p1Body = this.createPlayerBody(-5, 0);
+    this.engine.addPhysicsObject(this.p1Mesh, this.p1Body);
+
+    this.p2Mesh = this.createPlayerMesh(COLORS.P2);
+    this.p2Body = this.createPlayerBody(5, 0);
+    this.engine.addPhysicsObject(this.p2Mesh, this.p2Body);
+  }
+
+  private createBall(): void {
+    this.ballMesh = this.createBallMesh(this.BALL_RADIUS, COLORS.WHITE);
+    this.ballBody = this.createBallBody(this.BALL_RADIUS, 0, this.BALL_RADIUS, 0, 1);
+    this.engine.addPhysicsObject(this.ballMesh, this.ballBody);
+  }
+
+  private createFlashOverlay(): void {
+    const geo = new THREE.PlaneGeometry(100, 100);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+    });
+    this.flashOverlay = new THREE.Mesh(geo, mat);
+    this.flashOverlay.position.set(0, 15, 0);
+    this.flashOverlay.rotation.x = -Math.PI / 2;
+    this.flashOverlay.renderOrder = 999;
+    this.engine.scene.add(this.flashOverlay);
+  }
+
+  private createGround(): void {
+    this.groundBody = new CANNON.Body({
+      mass: 0,
+      shape: new CANNON.Plane(),
+    });
+    this.groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    this.engine.world.addBody(this.groundBody);
+  }
+
+  // --- Goal detection ---
+
+  private checkGoals(goalZ: number): void {
+    if (this.goalCooldown) {return;}
+
+    const bx = this.ballBody.position.x;
+    const bz = this.ballBody.position.z;
+
+    const withinGoalZ =
+      bz > goalZ - this.goalHalfWidth && bz < goalZ + this.goalHalfWidth;
+
+    // Ball crossed left goal line → P2 scores
+    if (bx < -this.GOAL_LINE_X && withinGoalZ) {
+      this.scoreP2++;
+      this.onGoalScored(COLORS.P2);
+      return;
+    }
+
+    // Ball crossed right goal line → P1 scores
+    if (bx > this.GOAL_LINE_X && withinGoalZ) {
+      this.scoreP1++;
+      this.onGoalScored(COLORS.P1);
+    }
+  }
+
+  private onGoalScored(flashColor: number): void {
+    this.goalCooldown = true;
+
+    // Flash effect
+    const flashMat = this.flashOverlay.material as THREE.MeshBasicMaterial;
+    flashMat.color.setHex(flashColor);
+    flashMat.opacity = 0.6;
+
+    // Reset ball after short delay
+    this.goalResetTimer = setTimeout(() => {
+      this.resetBall();
+      this.goalCooldown = false;
+      this.goalResetTimer = null;
+    }, 800);
+  }
+
+  private resetBall(): void {
+    this.ballBody.position.set(0, this.BALL_RADIUS, 0);
+    this.ballBody.velocity.set(0, 0, 0);
+    this.ballBody.angularVelocity.set(0, 0, 0);
   }
 }

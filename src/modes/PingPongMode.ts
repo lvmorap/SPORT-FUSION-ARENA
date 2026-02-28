@@ -77,6 +77,16 @@ export class PingPongMode extends GameMode {
         p1Body.velocity.y *= 0.85;
       }
       p1Body.velocity.y = Phaser.Math.Clamp(p1Body.velocity.y, -maxSpeed, maxSpeed);
+
+      if (this.scene.keys.a.isDown) {
+        p1Body.setAccelerationX(-accel);
+      } else if (this.scene.keys.d.isDown) {
+        p1Body.setAccelerationX(accel);
+      } else {
+        p1Body.setAccelerationX(0);
+        p1Body.velocity.x *= 0.85;
+      }
+      p1Body.velocity.x = Phaser.Math.Clamp(p1Body.velocity.x, -maxSpeed, maxSpeed);
     }
 
     if (isArcadeBody(p2Body)) {
@@ -89,10 +99,22 @@ export class PingPongMode extends GameMode {
         p2Body.velocity.y *= 0.85;
       }
       p2Body.velocity.y = Phaser.Math.Clamp(p2Body.velocity.y, -maxSpeed, maxSpeed);
+
+      if (this.scene.cursors.left.isDown) {
+        p2Body.setAccelerationX(-accel);
+      } else if (this.scene.cursors.right.isDown) {
+        p2Body.setAccelerationX(accel);
+      } else {
+        p2Body.setAccelerationX(0);
+        p2Body.velocity.x *= 0.85;
+      }
+      p2Body.velocity.x = Phaser.Math.Clamp(p2Body.velocity.x, -maxSpeed, maxSpeed);
     }
 
     this.p1.y = Phaser.Math.Clamp(this.p1.y, 110, 490);
+    this.p1.x = Phaser.Math.Clamp(this.p1.x, 85, 390);
     this.p2.y = Phaser.Math.Clamp(this.p2.y, 110, 490);
+    this.p2.x = Phaser.Math.Clamp(this.p2.x, 410, 715);
 
     if (this.ball.y < 85) {
       if (this.ball.body !== null) {
@@ -293,10 +315,15 @@ export class PingPongMode extends GameMode {
 
   public cleanup(): void {
     this.ballTrailGraphics?.destroy();
+    this.ballTrailGraphics = null;
     this.bg?.destroy();
+    this.bg = null;
     this.ball?.destroy();
+    this.ball = null;
     this.p1?.destroy();
+    this.p1 = null;
     this.p2?.destroy();
+    this.p2 = null;
   }
 
   public get modeName(): 'pingpong' {

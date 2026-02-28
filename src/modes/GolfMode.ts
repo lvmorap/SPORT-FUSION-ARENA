@@ -142,6 +142,8 @@ export class GolfMode extends GameMode {
 
     this.p1Ball = this.scene.physics.add.image(80, 490, 'p1_golf');
     this.p2Ball = this.scene.physics.add.image(120, 490, 'p2_golf');
+    this.p1Ball.setScale(0.42);
+    this.p2Ball.setScale(0.42);
     this.p1Ball.setBounce(0.5).setDrag(100).setMaxVelocity(800, 800);
     this.p2Ball.setBounce(0.5).setDrag(100).setMaxVelocity(800, 800);
     this.p1Ball.setCollideWorldBounds(true);
@@ -933,15 +935,25 @@ export class GolfMode extends GameMode {
 
   public cleanup(): void {
     this.powerBarGraphics?.destroy();
+    this.powerBarGraphics = null;
     this.arrowGraphics?.destroy();
+    this.arrowGraphics = null;
     this.courseGraphics?.destroy();
+    this.courseGraphics = null;
     this.holeGraphics?.destroy();
+    this.holeGraphics = null;
     this.strokeText?.destroy();
+    this.strokeText = null;
     this.ballTrailGraphics?.destroy();
+    this.ballTrailGraphics = null;
     this.obstacleGraphics?.destroy();
+    this.obstacleGraphics = null;
     this.bg?.destroy();
+    this.bg = null;
     this.p1Ball?.destroy();
+    this.p1Ball = null;
     this.p2Ball?.destroy();
+    this.p2Ball = null;
   }
 
   public get modeName(): 'golf' {

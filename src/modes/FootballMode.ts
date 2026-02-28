@@ -294,11 +294,17 @@ export class FootballMode extends GameMode {
 
   public cleanup(): void {
     this.goalGraphics?.destroy();
+    this.goalGraphics = null;
     this.particleGraphics?.destroy();
+    this.particleGraphics = null;
     this.bg?.destroy();
+    this.bg = null;
     this.ball?.destroy();
+    this.ball = null;
     this.p1?.destroy();
+    this.p1 = null;
     this.p2?.destroy();
+    this.p2 = null;
   }
 
   public get modeName(): 'football' {

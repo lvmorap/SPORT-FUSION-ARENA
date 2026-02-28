@@ -146,12 +146,16 @@ export class GameScene extends Phaser.Scene implements IGameScene {
       return;
     }
 
+    const p1Score = this.currentMode.p1Score;
+    const p2Score = this.currentMode.p2Score;
+
     this.currentMode.cleanup();
+    this.currentMode = null;
 
     let modeWinner: WinnerType = 'EMPATE';
-    if (this.currentMode.p1Score > this.currentMode.p2Score) {
+    if (p1Score > p2Score) {
       modeWinner = 'P1';
-    } else if (this.currentMode.p2Score > this.currentMode.p1Score) {
+    } else if (p2Score > p1Score) {
       modeWinner = 'P2';
     }
 
@@ -166,15 +170,15 @@ export class GameScene extends Phaser.Scene implements IGameScene {
       this.gameData.modeWinners.push({
         mode: currentModeName,
         winner: modeWinner,
-        p1Score: this.currentMode.p1Score,
-        p2Score: this.currentMode.p2Score,
+        p1Score: p1Score,
+        p2Score: p2Score,
       });
     }
 
     this.scene.start('ResultScene', {
       modeName: currentModeName ?? 'Unknown',
       modeWinner: modeWinner,
-      modeScores: { p1: this.currentMode.p1Score, p2: this.currentMode.p2Score },
+      modeScores: { p1: p1Score, p2: p2Score },
       globalScores: this.gameData.globalScores,
       modeNumber: this.gameData.currentModeIndex + 1,
       gameData: this.gameData,

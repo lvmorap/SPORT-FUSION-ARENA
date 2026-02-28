@@ -1,15 +1,4 @@
-/* SPORT FUSION ARENA - Global Styles */
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
-
-:root {
-  --p1: #00e5ff;      /* cyan — jugador 1 */
-  --p2: #ff3d71;      /* coral — jugador 2 */
-  --score: #ffeb00;   /* amarillo — puntuación */
-  --danger: #ff2222;  /* rojo — peligro/penalización */
-  --success: #00ff88; /* verde — éxito/punto */
-  --text: #ffffff;
-  --dark: #050510;
-}
+/* SPORT FUSION ARENA 3D - Global Styles */
 
 * {
   margin: 0;
@@ -17,27 +6,305 @@
   box-sizing: border-box;
 }
 
+html,
 body {
-  background-color: var(--dark);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
+  background: #000;
+  font-family: 'Rajdhani', sans-serif;
 }
 
 #game-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
 }
 
-canvas {
+#game-canvas {
   display: block;
-  max-width: 100%;
-  height: auto;
-  border: 2px solid #222;
-  border-radius: 4px;
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+  width: 100%;
+  height: 100%;
+}
+
+#ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#ui-overlay > * {
+  pointer-events: auto;
+}
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  color: #fff;
+  font-family: 'Orbitron', monospace;
+  pointer-events: none;
+}
+
+.hud-left,
+.hud-right {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.hud-score {
+  font-size: 28px;
+  font-weight: 700;
+  text-shadow: 0 0 20px rgba(0, 229, 255, 0.8);
+}
+
+.hud-score.p1 {
+  color: #00e5ff;
+}
+
+.hud-score.p2 {
+  color: #ff3d71;
+}
+
+.hud-label {
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+.hud-timer {
+  font-size: 36px;
+  font-weight: 900;
+  color: #ffeb00;
+  text-shadow: 0 0 30px rgba(255, 235, 0, 0.6);
+}
+
+.hud-mode {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.overlay-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(5, 5, 16, 0.92);
+  color: #fff;
+  text-align: center;
+  font-family: 'Orbitron', monospace;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.overlay-title {
+  font-size: 56px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #00e5ff, #ff3d71);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+  animation: pulse 2s infinite;
+}
+
+.overlay-subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 40px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+}
+
+.overlay-btn {
+  padding: 16px 48px;
+  font-size: 18px;
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #00e5ff, #0088cc);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 30px rgba(0, 229, 255, 0.4);
+}
+
+.overlay-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 40px rgba(0, 229, 255, 0.6);
+}
+
+.mode-intro {
+  animation: slideUp 0.6s ease;
+}
+
+.mode-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+}
+
+.mode-name {
+  font-size: 48px;
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+
+.mode-desc {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 500px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.mode-controls {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 20px;
+  letter-spacing: 2px;
+}
+
+.result-winner {
+  font-size: 56px;
+  font-weight: 900;
+  margin-bottom: 16px;
+}
+
+.result-winner.p1 {
+  color: #00e5ff;
+  text-shadow: 0 0 40px rgba(0, 229, 255, 0.6);
+}
+
+.result-winner.p2 {
+  color: #ff3d71;
+  text-shadow: 0 0 40px rgba(255, 61, 113, 0.6);
+}
+
+.result-winner.draw {
+  color: #ffeb00;
+  text-shadow: 0 0 40px rgba(255, 235, 0, 0.6);
+}
+
+.result-scores {
+  font-size: 22px;
+  margin-bottom: 30px;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.final-trophy {
+  font-size: 100px;
+  margin-bottom: 20px;
+}
+
+.final-title {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #ffeb00;
+  text-shadow: 0 0 40px rgba(255, 235, 0, 0.6);
+}
+
+.final-results {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 30px;
+  line-height: 2;
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 120px;
+  font-weight: 900;
+  font-family: 'Orbitron', monospace;
+  color: #ffeb00;
+  text-shadow: 0 0 60px rgba(255, 235, 0, 0.8);
+  animation: pulse 0.5s ease;
+  pointer-events: none;
+}
+
+.tournament-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 8px 32px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.tournament-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.tournament-dot.p1-win {
+  background: #00e5ff;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+}
+
+.tournament-dot.p2-win {
+  background: #ff3d71;
+  box-shadow: 0 0 10px rgba(255, 61, 113, 0.6);
+}
+
+.tournament-dot.draw-result {
+  background: #ffeb00;
+}
+
+.tournament-dot.current {
+  border: 2px solid #fff;
+  animation: pulse 1s infinite;
 }

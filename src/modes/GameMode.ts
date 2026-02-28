@@ -62,39 +62,91 @@ export abstract class GameMode {
 
   protected createPlayerMesh(color: number): THREE.Group {
     const group = new THREE.Group();
-    
-    // Body (capsule-like: cylinder + spheres)
-    const bodyGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.8, 16);
+
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: 0xffdbac,
+      roughness: 0.5,
+    });
     const bodyMat = new THREE.MeshStandardMaterial({
       color,
       roughness: 0.3,
       metalness: 0.1,
     });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.4;
-    body.castShadow = true;
-    group.add(body);
-
-    // Head
-    const headGeo = new THREE.SphereGeometry(0.3, 16, 16);
-    const headMat = new THREE.MeshStandardMaterial({
-      color: 0xffdbac,
+    const shortsMat = new THREE.MeshStandardMaterial({
+      color: 0x222222,
       roughness: 0.5,
     });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = 1.1;
+    const shoeMat = new THREE.MeshStandardMaterial({
+      color: 0x111111,
+      roughness: 0.4,
+      metalness: 0.2,
+    });
+
+    // Torso (jersey)
+    const torsoGeo = new THREE.BoxGeometry(0.5, 0.55, 0.3);
+    const torso = new THREE.Mesh(torsoGeo, bodyMat);
+    torso.position.y = 0.95;
+    torso.castShadow = true;
+    group.add(torso);
+
+    // Head
+    const headGeo = new THREE.SphereGeometry(0.22, 16, 16);
+    const head = new THREE.Mesh(headGeo, skinMat);
+    head.position.y = 1.42;
     head.castShadow = true;
     group.add(head);
 
-    // Number indicator ring
-    const ringGeo = new THREE.TorusGeometry(0.5, 0.05, 8, 32);
+    // Arms
+    const armGeo = new THREE.BoxGeometry(0.12, 0.45, 0.12);
+    const leftArm = new THREE.Mesh(armGeo, skinMat);
+    leftArm.position.set(-0.36, 0.95, 0);
+    leftArm.castShadow = true;
+    group.add(leftArm);
+    const rightArm = new THREE.Mesh(armGeo, skinMat);
+    rightArm.position.set(0.36, 0.95, 0);
+    rightArm.castShadow = true;
+    group.add(rightArm);
+
+    // Shorts / hips
+    const hipsGeo = new THREE.BoxGeometry(0.45, 0.2, 0.28);
+    const hips = new THREE.Mesh(hipsGeo, shortsMat);
+    hips.position.y = 0.58;
+    hips.castShadow = true;
+    group.add(hips);
+
+    // Left leg
+    const legGeo = new THREE.BoxGeometry(0.14, 0.4, 0.14);
+    const leftLeg = new THREE.Mesh(legGeo, skinMat);
+    leftLeg.position.set(-0.13, 0.28, 0);
+    leftLeg.castShadow = true;
+    group.add(leftLeg);
+
+    // Right leg (used for kick animation)
+    const rightLeg = new THREE.Mesh(legGeo, skinMat);
+    rightLeg.position.set(0.13, 0.28, 0);
+    rightLeg.castShadow = true;
+    rightLeg.name = 'kickLeg';
+    group.add(rightLeg);
+
+    // Shoes
+    const shoeGeo = new THREE.BoxGeometry(0.16, 0.08, 0.22);
+    const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
+    leftShoe.position.set(-0.13, 0.04, 0.02);
+    group.add(leftShoe);
+    const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
+    rightShoe.position.set(0.13, 0.04, 0.02);
+    rightShoe.name = 'kickShoe';
+    group.add(rightShoe);
+
+    // Glow ring at feet (team indicator)
+    const ringGeo = new THREE.TorusGeometry(0.4, 0.04, 8, 32);
     const ringMat = new THREE.MeshStandardMaterial({
       color,
       emissive: color,
-      emissiveIntensity: 0.5,
+      emissiveIntensity: 0.6,
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.position.y = 0.05;
+    ring.position.y = 0.02;
     ring.rotation.x = Math.PI / 2;
     group.add(ring);
 
@@ -117,8 +169,8 @@ export abstract class GameMode {
   protected createPlayerBody(x: number, z: number): CANNON.Body {
     const body = new CANNON.Body({
       mass: 5,
-      shape: new CANNON.Cylinder(0.4, 0.4, 1.2, 16),
-      position: new CANNON.Vec3(x, 0.6, z),
+      shape: new CANNON.Box(new CANNON.Vec3(0.25, 0.75, 0.25)),
+      position: new CANNON.Vec3(x, 0.85, z),
       linearDamping: 0.9,
       angularDamping: 0.99,
     });

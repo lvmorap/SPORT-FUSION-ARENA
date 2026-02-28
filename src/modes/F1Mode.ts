@@ -15,24 +15,24 @@ export class F1Mode extends GameMode {
   private speedText: Phaser.GameObjects.Text | null = null;
 
   private trackPoints: TrackPoint[] = [
-    { x: 150, y: 150 },
-    { x: 400, y: 80 },
-    { x: 650, y: 150 },
-    { x: 700, y: 250 },
-    { x: 600, y: 300 },
-    { x: 680, y: 370 },
-    { x: 650, y: 480 },
-    { x: 400, y: 530 },
-    { x: 150, y: 480 },
-    { x: 100, y: 350 },
-    { x: 150, y: 250 },
+    { x: 100, y: 120 },
+    { x: 400, y: 55 },
+    { x: 700, y: 120 },
+    { x: 760, y: 230 },
+    { x: 640, y: 300 },
+    { x: 740, y: 390 },
+    { x: 700, y: 520 },
+    { x: 400, y: 560 },
+    { x: 100, y: 520 },
+    { x: 50, y: 370 },
+    { x: 100, y: 230 },
   ];
 
   private checkpoints: Checkpoint[] = [
-    { x: 400, y: 95, r: 65, id: 'top' },
-    { x: 690, y: 300, r: 65, id: 'right' },
-    { x: 400, y: 525, r: 65, id: 'bottom' },
-    { x: 110, y: 300, r: 65, id: 'left' },
+    { x: 400, y: 70, r: 75, id: 'top' },
+    { x: 750, y: 300, r: 75, id: 'right' },
+    { x: 400, y: 555, r: 75, id: 'bottom' },
+    { x: 60, y: 370, r: 75, id: 'left' },
   ];
 
   private p1Car: F1Car | null = null;
@@ -75,12 +75,12 @@ export class F1Mode extends GameMode {
 
     this.trailGraphics = this.scene.add.graphics();
 
-    const p1CarBase = this.scene.physics.add.image(180, 170, 'p1_f1');
+    const p1CarBase = this.scene.physics.add.image(130, 140, 'p1_f1');
     p1CarBase.setMaxVelocity(500, 500);
     this.p1Car = p1CarBase as F1Car;
     this.p1Car.customData = { speed: 0, angle: 0, driftAngle: 0 };
 
-    const p2CarBase = this.scene.physics.add.image(180, 210, 'p2_f1');
+    const p2CarBase = this.scene.physics.add.image(130, 180, 'p2_f1');
     p2CarBase.setMaxVelocity(500, 500);
     this.p2Car = p2CarBase as F1Car;
     this.p2Car.customData = { speed: 0, angle: 0, driftAngle: 0 };
@@ -109,52 +109,52 @@ export class F1Mode extends GameMode {
       return;
     }
 
-    this.trackGraphics.lineStyle(75, 0x333333, 1);
+    this.trackGraphics.lineStyle(85, 0x333333, 1);
     this.trackGraphics.beginPath();
-    this.trackGraphics.moveTo(150, 150);
-    this.trackGraphics.lineTo(400, 80);
-    this.trackGraphics.lineTo(650, 150);
-    this.trackGraphics.lineTo(700, 250);
-    this.trackGraphics.lineTo(600, 300);
-    this.trackGraphics.lineTo(680, 370);
-    this.trackGraphics.lineTo(650, 480);
-    this.trackGraphics.lineTo(400, 530);
-    this.trackGraphics.lineTo(150, 480);
-    this.trackGraphics.lineTo(100, 350);
-    this.trackGraphics.lineTo(150, 250);
+    this.trackGraphics.moveTo(100, 120);
+    this.trackGraphics.lineTo(400, 55);
+    this.trackGraphics.lineTo(700, 120);
+    this.trackGraphics.lineTo(760, 230);
+    this.trackGraphics.lineTo(640, 300);
+    this.trackGraphics.lineTo(740, 390);
+    this.trackGraphics.lineTo(700, 520);
+    this.trackGraphics.lineTo(400, 560);
+    this.trackGraphics.lineTo(100, 520);
+    this.trackGraphics.lineTo(50, 370);
+    this.trackGraphics.lineTo(100, 230);
     this.trackGraphics.closePath();
     this.trackGraphics.strokePath();
 
     this.trackGraphics.lineStyle(4, 0xff0000, 0.6);
     this.trackGraphics.beginPath();
-    this.trackGraphics.moveTo(150, 150);
-    this.trackGraphics.lineTo(400, 80);
-    this.trackGraphics.lineTo(650, 150);
+    this.trackGraphics.moveTo(100, 120);
+    this.trackGraphics.lineTo(400, 55);
+    this.trackGraphics.lineTo(700, 120);
     this.trackGraphics.strokePath();
 
     this.trackGraphics.lineStyle(2, 0xffffff, 0.4);
     this.trackGraphics.beginPath();
-    this.trackGraphics.moveTo(150, 150);
-    this.trackGraphics.lineTo(400, 80);
-    this.trackGraphics.lineTo(650, 150);
-    this.trackGraphics.lineTo(700, 250);
-    this.trackGraphics.lineTo(600, 300);
-    this.trackGraphics.lineTo(680, 370);
-    this.trackGraphics.lineTo(650, 480);
-    this.trackGraphics.lineTo(400, 530);
-    this.trackGraphics.lineTo(150, 480);
-    this.trackGraphics.lineTo(100, 350);
-    this.trackGraphics.lineTo(150, 250);
+    this.trackGraphics.moveTo(100, 120);
+    this.trackGraphics.lineTo(400, 55);
+    this.trackGraphics.lineTo(700, 120);
+    this.trackGraphics.lineTo(760, 230);
+    this.trackGraphics.lineTo(640, 300);
+    this.trackGraphics.lineTo(740, 390);
+    this.trackGraphics.lineTo(700, 520);
+    this.trackGraphics.lineTo(400, 560);
+    this.trackGraphics.lineTo(100, 520);
+    this.trackGraphics.lineTo(50, 370);
+    this.trackGraphics.lineTo(100, 230);
     this.trackGraphics.closePath();
     this.trackGraphics.strokePath();
 
     this.trackGraphics.lineStyle(8, 0xffffff, 1);
-    this.trackGraphics.lineBetween(150, 135, 150, 225);
+    this.trackGraphics.lineBetween(100, 105, 100, 205);
     this.trackGraphics.lineStyle(4, 0x000000, 1);
-    this.trackGraphics.lineBetween(150, 145, 150, 155);
-    this.trackGraphics.lineBetween(150, 165, 150, 175);
-    this.trackGraphics.lineBetween(150, 185, 150, 195);
-    this.trackGraphics.lineBetween(150, 205, 150, 215);
+    this.trackGraphics.lineBetween(100, 115, 100, 125);
+    this.trackGraphics.lineBetween(100, 135, 100, 145);
+    this.trackGraphics.lineBetween(100, 155, 100, 165);
+    this.trackGraphics.lineBetween(100, 175, 100, 185);
   }
 
   public update(time: number, delta: number): void {
@@ -369,8 +369,8 @@ export class F1Mode extends GameMode {
       }
     }
 
-    car.x = Phaser.Math.Clamp(car.x, 30, 770);
-    car.y = Phaser.Math.Clamp(car.y, 30, 570);
+    car.x = Phaser.Math.Clamp(car.x, 15, 785);
+    car.y = Phaser.Math.Clamp(car.y, 15, 585);
   }
 
   private checkLaps(car: F1Car, player: 'p1' | 'p2', time: number): void {

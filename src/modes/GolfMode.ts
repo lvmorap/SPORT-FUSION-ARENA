@@ -3,6 +3,44 @@ import { GameMode } from './GameMode';
 import type { GameScene, Hole, Hazard, TrailPoint } from '../types';
 import { isArcadeBody } from '../utils/helpers';
 
+interface Wall {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface SpinnerObstacle {
+  cx: number;
+  cy: number;
+  length: number;
+  angle: number;
+  speed: number;
+  thickness: number;
+}
+
+interface GapWall {
+  x: number;
+  y: number;
+  totalWidth: number;
+  height: number;
+  gapOffset: number;
+  gapSize: number;
+  vertical: boolean;
+}
+
+interface MovingBar {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  minPos: number;
+  maxPos: number;
+  speed: number;
+  dir: number;
+  vertical: boolean;
+}
+
 export class GolfMode extends GameMode {
   private bg: Phaser.GameObjects.Image | null = null;
   private courseGraphics: Phaser.GameObjects.Graphics | null = null;
@@ -10,11 +48,60 @@ export class GolfMode extends GameMode {
   private ballTrailGraphics: Phaser.GameObjects.Graphics | null = null;
   private powerBarGraphics: Phaser.GameObjects.Graphics | null = null;
   private arrowGraphics: Phaser.GameObjects.Graphics | null = null;
+  private obstacleGraphics: Phaser.GameObjects.Graphics | null = null;
   private strokeText: Phaser.GameObjects.Text | null = null;
 
-  private hole: Hole = { x: 680, y: 120, r: 20 };
-  private waterHazard: Hazard = { x: 250, y: 350, radius: 40 };
-  private sandTrap: Hazard = { x: 450, y: 180, radius: 30 };
+  private hole: Hole = { x: 720, y: 80, r: 20 };
+  private waterHazard: Hazard = { x: 200, y: 310, radius: 35 };
+  private sandTrap: Hazard = { x: 500, y: 150, radius: 30 };
+
+  private walls: Wall[] = [
+    { x: 20, y: 390, w: 10, h: 180 },
+    { x: 20, y: 560, w: 250, h: 10 },
+    { x: 260, y: 390, w: 10, h: 180 },
+    { x: 20, y: 390, w: 130, h: 10 },
+    { x: 140, y: 150, w: 10, h: 250 },
+    { x: 260, y: 150, w: 10, h: 250 },
+    { x: 140, y: 150, w: 130, h: 10 },
+    { x: 140, y: 85, w: 10, h: 75 },
+    { x: 260, y: 60, w: 10, h: 100 },
+    { x: 140, y: 85, w: 510, h: 10 },
+    { x: 640, y: 60, w: 140, h: 10 },
+    { x: 770, y: 60, w: 10, h: 180 },
+    { x: 640, y: 230, w: 140, h: 10 },
+    { x: 260, y: 60, w: 390, h: 10 },
+  ];
+
+  private spinner: SpinnerObstacle = {
+    cx: 400,
+    cy: 145,
+    length: 65,
+    angle: 0,
+    speed: 1.8,
+    thickness: 8,
+  };
+
+  private gapWall: GapWall = {
+    x: 200,
+    y: 230,
+    totalWidth: 8,
+    height: 150,
+    gapOffset: 55,
+    gapSize: 40,
+    vertical: true,
+  };
+
+  private movingBar: MovingBar = {
+    x: 500,
+    y: 145,
+    width: 8,
+    height: 60,
+    minPos: 95,
+    maxPos: 220,
+    speed: 120,
+    dir: 1,
+    vertical: true,
+  };
 
   private p1Ball: Phaser.Physics.Arcade.Image | null = null;
   private p2Ball: Phaser.Physics.Arcade.Image | null = null;
@@ -49,10 +136,12 @@ export class GolfMode extends GameMode {
     this.holeGraphics = this.scene.add.graphics();
     this.drawHole();
 
+    this.obstacleGraphics = this.scene.add.graphics();
+
     this.ballTrailGraphics = this.scene.add.graphics();
 
-    this.p1Ball = this.scene.physics.add.image(120, 500, 'p1_golf');
-    this.p2Ball = this.scene.physics.add.image(160, 500, 'p2_golf');
+    this.p1Ball = this.scene.physics.add.image(80, 490, 'p1_golf');
+    this.p2Ball = this.scene.physics.add.image(120, 490, 'p2_golf');
     this.p1Ball.setBounce(0.5).setDrag(100).setMaxVelocity(800, 800);
     this.p2Ball.setBounce(0.5).setDrag(100).setMaxVelocity(800, 800);
     this.p1Ball.setCollideWorldBounds(true);
@@ -63,7 +152,7 @@ export class GolfMode extends GameMode {
     });
 
     this.strokeText = this.scene.add
-      .text(400, 570, 'P1: 0 golpes | P2: 0 golpes', {
+      .text(400, 585, 'P1: 0 golpes | P2: 0 golpes', {
         fontSize: '14px',
         fontFamily: 'Share Tech Mono, Courier New, monospace',
         color: '#ffffff',
@@ -145,18 +234,16 @@ export class GolfMode extends GameMode {
     }
 
     this.courseGraphics.fillStyle(0x1a3d1a, 0.5);
-    this.courseGraphics.fillRect(60, 430, 200, 130);
-    this.courseGraphics.fillRect(110, 180, 120, 290);
-    this.courseGraphics.fillRect(110, 180, 290, 120);
-    this.courseGraphics.fillRect(280, 80, 120, 220);
-    this.courseGraphics.fillRect(280, 80, 460, 120);
+    this.courseGraphics.fillRect(20, 390, 250, 180);
+    this.courseGraphics.fillRect(140, 85, 130, 320);
+    this.courseGraphics.fillRect(140, 60, 520, 100);
+    this.courseGraphics.fillRect(640, 60, 140, 180);
 
     this.courseGraphics.fillStyle(0x2d5a2d, 0.7);
-    this.courseGraphics.fillRect(80, 450, 160, 100);
-    this.courseGraphics.fillRect(130, 200, 80, 260);
-    this.courseGraphics.fillRect(130, 200, 250, 80);
-    this.courseGraphics.fillRect(300, 100, 80, 180);
-    this.courseGraphics.fillRect(300, 100, 420, 80);
+    this.courseGraphics.fillRect(40, 410, 210, 140);
+    this.courseGraphics.fillRect(155, 100, 100, 300);
+    this.courseGraphics.fillRect(155, 75, 490, 70);
+    this.courseGraphics.fillRect(655, 75, 110, 150);
 
     this.courseGraphics.fillStyle(0x3d7a3d, 0.8);
     this.courseGraphics.fillCircle(this.hole.x, this.hole.y, 50);
@@ -181,6 +268,209 @@ export class GolfMode extends GameMode {
     );
     this.courseGraphics.fillStyle(0x66aaff, 0.5);
     this.courseGraphics.fillCircle(this.waterHazard.x - 8, this.waterHazard.y - 8, 8);
+
+    for (const wall of this.walls) {
+      this.courseGraphics.fillStyle(0x5c3a1e, 0.9);
+      this.courseGraphics.fillRect(wall.x, wall.y, wall.w, wall.h);
+      this.courseGraphics.lineStyle(1, 0x8b5e3c, 0.8);
+      this.courseGraphics.strokeRect(wall.x, wall.y, wall.w, wall.h);
+    }
+  }
+
+  private drawObstacles(): void {
+    if (this.obstacleGraphics === null) {
+      return;
+    }
+
+    this.obstacleGraphics.clear();
+
+    const s = this.spinner;
+    const ex1 = s.cx + Math.cos(s.angle) * s.length;
+    const ey1 = s.cy + Math.sin(s.angle) * s.length;
+    const ex2 = s.cx - Math.cos(s.angle) * s.length;
+    const ey2 = s.cy - Math.sin(s.angle) * s.length;
+    this.obstacleGraphics.lineStyle(s.thickness, 0xff6600, 0.9);
+    this.obstacleGraphics.lineBetween(ex1, ey1, ex2, ey2);
+    this.obstacleGraphics.fillStyle(0xff8800, 1);
+    this.obstacleGraphics.fillCircle(s.cx, s.cy, 6);
+    this.obstacleGraphics.lineStyle(2, 0xffaa00, 0.6);
+    this.obstacleGraphics.strokeCircle(s.cx, s.cy, 8);
+
+    const gw = this.gapWall;
+    if (gw.vertical) {
+      this.obstacleGraphics.fillStyle(0x666666, 0.9);
+      this.obstacleGraphics.fillRect(gw.x, gw.y, gw.totalWidth, gw.gapOffset);
+      this.obstacleGraphics.fillRect(
+        gw.x,
+        gw.y + gw.gapOffset + gw.gapSize,
+        gw.totalWidth,
+        gw.height - gw.gapOffset - gw.gapSize
+      );
+      this.obstacleGraphics.lineStyle(1, 0x888888, 0.7);
+      this.obstacleGraphics.strokeRect(gw.x, gw.y, gw.totalWidth, gw.gapOffset);
+      this.obstacleGraphics.strokeRect(
+        gw.x,
+        gw.y + gw.gapOffset + gw.gapSize,
+        gw.totalWidth,
+        gw.height - gw.gapOffset - gw.gapSize
+      );
+      this.obstacleGraphics.fillStyle(0x00ff00, 0.3);
+      this.obstacleGraphics.fillRect(gw.x - 2, gw.y + gw.gapOffset, gw.totalWidth + 4, gw.gapSize);
+    }
+
+    const mb = this.movingBar;
+    this.obstacleGraphics.fillStyle(0xcc0000, 0.9);
+    this.obstacleGraphics.fillRect(mb.x, mb.y, mb.width, mb.height);
+    this.obstacleGraphics.lineStyle(1, 0xff4444, 0.8);
+    this.obstacleGraphics.strokeRect(mb.x, mb.y, mb.width, mb.height);
+    const stripes = 3;
+    for (let i = 0; i < stripes; i++) {
+      const sy = mb.y + ((i + 0.5) / stripes) * mb.height;
+      this.obstacleGraphics.lineStyle(2, 0xffcc00, 0.6);
+      this.obstacleGraphics.lineBetween(mb.x + 1, sy, mb.x + mb.width - 1, sy);
+    }
+  }
+
+  private updateObstacles(delta: number): void {
+    this.spinner.angle += this.spinner.speed * (delta / 1000);
+
+    if (this.movingBar.vertical) {
+      this.movingBar.y += this.movingBar.speed * this.movingBar.dir * (delta / 1000);
+      if (this.movingBar.y <= this.movingBar.minPos) {
+        this.movingBar.y = this.movingBar.minPos;
+        this.movingBar.dir = 1;
+      } else if (this.movingBar.y + this.movingBar.height >= this.movingBar.maxPos) {
+        this.movingBar.y = this.movingBar.maxPos - this.movingBar.height;
+        this.movingBar.dir = -1;
+      }
+    }
+  }
+
+  private checkWallCollisions(ball: Phaser.Physics.Arcade.Image): void {
+    if (ball.body === null) {
+      return;
+    }
+
+    const bx = ball.x;
+    const by = ball.y;
+    const br = 10;
+
+    for (const wall of this.walls) {
+      const closestX = Phaser.Math.Clamp(bx, wall.x, wall.x + wall.w);
+      const closestY = Phaser.Math.Clamp(by, wall.y, wall.y + wall.h);
+      const dx = bx - closestX;
+      const dy = by - closestY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < br) {
+        if (wall.w > wall.h) {
+          ball.body.velocity.y *= -0.7;
+          ball.y = by < wall.y ? wall.y - br : wall.y + wall.h + br;
+        } else {
+          ball.body.velocity.x *= -0.7;
+          ball.x = bx < wall.x ? wall.x - br : wall.x + wall.w + br;
+        }
+      }
+    }
+  }
+
+  private checkSpinnerCollision(ball: Phaser.Physics.Arcade.Image): void {
+    if (ball.body === null) {
+      return;
+    }
+
+    const s = this.spinner;
+    const br = 10;
+    const ex1 = s.cx + Math.cos(s.angle) * s.length;
+    const ey1 = s.cy + Math.sin(s.angle) * s.length;
+    const ex2 = s.cx - Math.cos(s.angle) * s.length;
+    const ey2 = s.cy - Math.sin(s.angle) * s.length;
+
+    const dist = this.pointToSegmentDist(ball.x, ball.y, ex1, ey1, ex2, ey2);
+
+    if (dist < br + s.thickness / 2) {
+      const perpAngle = s.angle + Math.PI / 2;
+      const pushForce = 350;
+      const side =
+        (ball.x - s.cx) * Math.sin(s.angle) - (ball.y - s.cy) * Math.cos(s.angle) > 0 ? 1 : -1;
+      ball.body.velocity.x += Math.cos(perpAngle) * pushForce * side * 0.016;
+      ball.body.velocity.y += Math.sin(perpAngle) * pushForce * side * 0.016;
+    }
+  }
+
+  private checkGapWallCollision(ball: Phaser.Physics.Arcade.Image): void {
+    if (ball.body === null) {
+      return;
+    }
+
+    const gw = this.gapWall;
+    const br = 10;
+
+    if (gw.vertical) {
+      const inGap = ball.y >= gw.y + gw.gapOffset && ball.y <= gw.y + gw.gapOffset + gw.gapSize;
+      if (!inGap) {
+        const closestX = Phaser.Math.Clamp(ball.x, gw.x, gw.x + gw.totalWidth);
+        const closestY = Phaser.Math.Clamp(ball.y, gw.y, gw.y + gw.height);
+        const dx = ball.x - closestX;
+        const dy = ball.y - closestY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < br) {
+          ball.body.velocity.x *= -0.7;
+          ball.x = ball.x < gw.x ? gw.x - br : gw.x + gw.totalWidth + br;
+        }
+      }
+    }
+  }
+
+  private checkMovingBarCollision(ball: Phaser.Physics.Arcade.Image): void {
+    if (ball.body === null) {
+      return;
+    }
+
+    const mb = this.movingBar;
+    const br = 10;
+    const closestX = Phaser.Math.Clamp(ball.x, mb.x, mb.x + mb.width);
+    const closestY = Phaser.Math.Clamp(ball.y, mb.y, mb.y + mb.height);
+    const dx = ball.x - closestX;
+    const dy = ball.y - closestY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < br) {
+      if (mb.vertical) {
+        ball.body.velocity.y *= -0.7;
+        ball.body.velocity.y += mb.speed * mb.dir * 0.5;
+        ball.y = ball.y < mb.y ? mb.y - br : mb.y + mb.height + br;
+      } else {
+        ball.body.velocity.x *= -0.7;
+        ball.body.velocity.x += mb.speed * mb.dir * 0.5;
+        ball.x = ball.x < mb.x ? mb.x - br : mb.x + mb.width + br;
+      }
+    }
+  }
+
+  private pointToSegmentDist(
+    px: number,
+    py: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number
+  ): number {
+    const abx = bx - ax;
+    const aby = by - ay;
+    const apx = px - ax;
+    const apy = py - ay;
+    const ab2 = abx * abx + aby * aby;
+    if (ab2 < 0.0001) {
+      return Math.sqrt(apx * apx + apy * apy);
+    }
+    const t = Phaser.Math.Clamp((apx * abx + apy * aby) / ab2, 0, 1);
+    const closestX = ax + t * abx;
+    const closestY = ay + t * aby;
+    const dx = px - closestX;
+    const dy = py - closestY;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   public update(_time: number, delta: number): void {
@@ -196,8 +486,24 @@ export class GolfMode extends GameMode {
       this.handleGolfInput(2, this.p2Ball, delta);
     }
 
+    this.updateObstacles(delta);
+
+    if (!this.p1Finished) {
+      this.checkWallCollisions(this.p1Ball);
+      this.checkSpinnerCollision(this.p1Ball);
+      this.checkGapWallCollision(this.p1Ball);
+      this.checkMovingBarCollision(this.p1Ball);
+    }
+    if (!this.p2Finished) {
+      this.checkWallCollisions(this.p2Ball);
+      this.checkSpinnerCollision(this.p2Ball);
+      this.checkGapWallCollision(this.p2Ball);
+      this.checkMovingBarCollision(this.p2Ball);
+    }
+
     this.checkHole();
     this.drawUI();
+    this.drawObstacles();
     this.checkWater();
     this.checkSand();
     this.updateBallTrails();
@@ -574,7 +880,7 @@ export class GolfMode extends GameMode {
     );
 
     if (d1 < this.waterHazard.radius && !this.p1Finished) {
-      this.p1Ball.setPosition(120, 500);
+      this.p1Ball.setPosition(80, 490);
       if (isArcadeBody(this.p1Ball.body)) {
         this.p1Ball.body.setVelocity(0, 0);
       }
@@ -590,7 +896,7 @@ export class GolfMode extends GameMode {
     }
 
     if (d2 < this.waterHazard.radius && !this.p2Finished) {
-      this.p2Ball.setPosition(160, 500);
+      this.p2Ball.setPosition(120, 490);
       if (isArcadeBody(this.p2Ball.body)) {
         this.p2Ball.body.setVelocity(0, 0);
       }
@@ -632,6 +938,7 @@ export class GolfMode extends GameMode {
     this.holeGraphics?.destroy();
     this.strokeText?.destroy();
     this.ballTrailGraphics?.destroy();
+    this.obstacleGraphics?.destroy();
     this.bg?.destroy();
     this.p1Ball?.destroy();
     this.p2Ball?.destroy();

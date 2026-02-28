@@ -586,7 +586,7 @@ export class GolfMode extends GameMode {
 
     player.body.velocity.set(0, 0, 0);
     player.body.angularVelocity.set(0, 0, 0);
-    player.body.applyImpulse(new CANNON.Vec3(dirX * power, 0, dirZ * power), player.body.position);
+    player.body.applyImpulse(new CANNON.Vec3(dirX * power, 0, dirZ * power));
     player.strokes++;
   }
 

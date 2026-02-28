@@ -93,6 +93,8 @@ export class Engine {
     for (const body of bodiesToRemove) {
       this.world.removeBody(body);
     }
+    // Clear accumulated contact materials from previous modes
+    this.world.contactmaterials.length = 0;
     this.physicsObjects = [];
   }
 

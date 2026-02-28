@@ -514,11 +514,11 @@ export class PingPongMode extends GameMode {
     if (bs.x < -SCORE_X) {
       // Ball passed P1's side → P2 scores
       this.scoreP2++;
-      this.resetBall('P2');
+      this.resetBall('P1');
     } else if (bs.x > SCORE_X) {
       // Ball passed P2's side → P1 scores
       this.scoreP1++;
-      this.resetBall('P1');
+      this.resetBall('P2');
     }
   }
 }

@@ -201,6 +201,6 @@ export abstract class GameMode {
     if (input.isDown(controls.left)) { force.x -= speed; }
     if (input.isDown(controls.right)) { force.x += speed; }
 
-    body.applyForce(force, body.position);
+    body.applyForce(force);
   }
 }

@@ -122,7 +122,7 @@ export class F1Mode extends GameMode {
       z: 0,
       angle: Math.PI / 2,
       speed: 0,
-      nextCheckpoint: 0,
+      nextCheckpoint: 1,
       penaltyTimer: 0,
       onTrack: true,
     };

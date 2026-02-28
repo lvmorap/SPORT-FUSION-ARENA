@@ -859,6 +859,9 @@ class GolfMode extends GameMode {
     this.p1Ball.setCollideWorldBounds(true);
     this.p2Ball.setCollideWorldBounds(true);
 
+    // Water hazard definition
+    this.waterHazard = { x: 250, y: 350, radius: 35 };
+
     // Power and angle
     this.p1Power = 0;
     this.p2Power = 0;
@@ -890,11 +893,11 @@ class GolfMode extends GameMode {
     // Final horizontal to hole
     this.courseGraphics.fillRect(300, 100, 420, 80);
 
-    // Water hazard
+    // Water hazard - draw using stored coordinates
     this.courseGraphics.fillStyle(0x0066cc, 0.7);
-    this.courseGraphics.fillCircle(250, 350, 35);
+    this.courseGraphics.fillCircle(this.waterHazard.x, this.waterHazard.y, this.waterHazard.radius);
     this.courseGraphics.fillStyle(0xffffff, 0.8);
-    this.courseGraphics.fillCircle(250, 350, 5);
+    this.courseGraphics.fillCircle(this.waterHazard.x, this.waterHazard.y, 5);
   }
 
   update(time, delta) {
@@ -1033,22 +1036,22 @@ class GolfMode extends GameMode {
   }
 
   checkWater() {
-    // Water at 250, 350 radius 35
-    const d1 = Phaser.Math.Distance.Between(this.p1Ball.x, this.p1Ball.y, 250, 350);
-    const d2 = Phaser.Math.Distance.Between(this.p2Ball.x, this.p2Ball.y, 250, 350);
+    const hz = this.waterHazard;
+    const d1 = Phaser.Math.Distance.Between(this.p1Ball.x, this.p1Ball.y, hz.x, hz.y);
+    const d2 = Phaser.Math.Distance.Between(this.p2Ball.x, this.p2Ball.y, hz.x, hz.y);
 
-    if (d1 < 35 && !this.p1Finished) {
+    if (d1 < hz.radius && !this.p1Finished) {
       this.p1Ball.setPosition(120, 500);
       this.p1Ball.body.setVelocity(0, 0);
       this.p1Strokes += 2;
-      this.scene.showFloatingText(250, 350, '+2 PENALIDAD', '#ff2222');
+      this.scene.showFloatingText(hz.x, hz.y, '+2 PENALIDAD', '#ff2222');
     }
 
-    if (d2 < 35 && !this.p2Finished) {
+    if (d2 < hz.radius && !this.p2Finished) {
       this.p2Ball.setPosition(160, 500);
       this.p2Ball.body.setVelocity(0, 0);
       this.p2Strokes += 2;
-      this.scene.showFloatingText(250, 350, '+2 PENALIDAD', '#ff2222');
+      this.scene.showFloatingText(hz.x, hz.y, '+2 PENALIDAD', '#ff2222');
     }
   }
 
@@ -1225,7 +1228,10 @@ class F1Mode extends GameMode {
   }
 
   isOnTrack(x, y) {
-    // Simple bounding check
+    // Ray casting algorithm for point-in-polygon detection
+    // Cast a ray from point (x,y) to infinity and count intersections with polygon edges
+    // If odd number of intersections, point is inside; if even, point is outside
+    // Reference: https://en.wikipedia.org/wiki/Point_in_polygon#Ray_casting_algorithm
     let inside = false;
     for (let i = 0, j = this.trackPoints.length - 1; i < this.trackPoints.length; j = i++) {
       const xi = this.trackPoints[i].x, yi = this.trackPoints[i].y;

@@ -417,9 +417,11 @@ class ModeIntroScene extends Phaser.Scene {
         });
         
         // Color change as countdown progresses
-        if (this.countdown === 2) this.countdownText.setColor('#ffaa00');
-        if (this.countdown === 1) this.countdownText.setColor('#ff6600');
-        if (this.countdown === 0) {
+        if (this.countdown === 2) {
+          this.countdownText.setColor('#ffaa00');
+        } else if (this.countdown === 1) {
+          this.countdownText.setColor('#ff6600');
+        } else if (this.countdown === 0) {
           this.countdownText.setColor('#00ff88');
           this.time.delayedCall(200, () => this.startGame());
         }

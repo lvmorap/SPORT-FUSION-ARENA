@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 
-export type ModeName = 'football' | 'sumo' | 'pingpong' | 'f1';
+export type ModeName = 'football' | 'sumo' | 'pingpong' | 'f1' | 'billar';
 export type WinnerType = 'P1' | 'P2' | 'DRAW';
 export type PlayerID = 'P1' | 'P2';
 export type GameState = 'menu' | 'intro' | 'countdown' | 'playing' | 'result' | 'final';
@@ -71,6 +71,14 @@ export const MODE_CONFIGS: ModeConfig[] = [
     description: '¡Estilo TRON! Deja estela de luz que noquea rivales 1s. Turbo con cooldown (F/Shift). 3 vueltas para ganar.',
     duration: 120,
     bgColor: 0x1a1a2a,
+  },
+  {
+    name: 'billar',
+    displayName: 'BILLAR 3D',
+    icon: '🎱',
+    description: 'Billar por turnos. ¡Emboca más bolas que tu rival! Turno extra si embolsas. Apunta con ←→, potencia con ↑↓, dispara con F/Shift.',
+    duration: 90,
+    bgColor: 0x0a2018,
   },
 ];
 

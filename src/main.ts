@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Engine } from './core/Engine';
 import { Overlay } from './ui/Overlay';
-import { GameMode, FootballMode, SumoMode, PingPongMode, F1Mode } from './modes';
+import { GameMode, FootballMode, SumoMode, PingPongMode, F1Mode, BillarMode } from './modes';
 import { GameData, GameState, MODE_CONFIGS, ModeConfig, ModeName } from './types';
 
 // --- State ---
@@ -16,7 +16,7 @@ let countdownAccum = 0;
 
 const gameData: GameData = {
   currentModeIndex: 0,
-  modes: ['football', 'sumo', 'pingpong', 'f1'],
+  modes: ['football', 'sumo', 'pingpong', 'f1', 'billar'],
   results: [],
   winsP1: 0,
   winsP2: 0,
@@ -131,6 +131,7 @@ function createMode(name: ModeName): GameMode {
     case 'sumo': return new SumoMode(engine);
     case 'pingpong': return new PingPongMode(engine);
     case 'f1': return new F1Mode(engine);
+    case 'billar': return new BillarMode(engine);
   }
 }
 
@@ -138,7 +139,7 @@ function createMode(name: ModeName): GameMode {
 function goToMenu(): void {
   state = 'menu';
   gameData.currentModeIndex = 0;
-  gameData.modes = shuffleArray(['football', 'sumo', 'pingpong', 'f1']);
+  gameData.modes = shuffleArray(['football', 'sumo', 'pingpong', 'f1', 'billar']);
   gameData.results = [];
   gameData.winsP1 = 0;
   gameData.winsP2 = 0;
@@ -163,7 +164,7 @@ function goToIntro(): void {
   currentMode = createMode(config.name);
   currentMode.setup();
 
-  overlay.showModeIntro(config, gameData.currentModeIndex, () => {
+  overlay.showModeIntro(config, gameData.currentModeIndex, gameData.modes.length, () => {
     goToCountdown();
   });
 }

@@ -62,11 +62,11 @@ export class SumoMode extends GameMode {
   private readonly ZONE_WANDER_SPEED = 3;
   private readonly ZONE_DIR_CHANGE_INTERVAL = 2.5;
   private readonly PUSH_RADIUS = 2.2;
-  private readonly PUSH_FORCE = 150;
+  private readonly PUSH_FORCE = 300;
   private readonly ARENA_MIN_RADIUS = 5;
   private readonly JUMP_FORCE = 8;
   private readonly JUMP_COOLDOWN = 2;
-  private readonly DASH_ENEMY_PUSH = 200;
+  private readonly DASH_ENEMY_PUSH = 400;
   private readonly BOUNDARY_SCORE_POINTS = 1;
 
   private currentArenaRadius = 12;

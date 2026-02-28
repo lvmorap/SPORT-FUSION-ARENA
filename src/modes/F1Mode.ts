@@ -394,11 +394,12 @@ export class F1Mode extends GameMode {
         }
 
         if (checkpointsSet.size === this.checkpoints.length) {
+          let isBestLap = false;
           if (player === 'p1') {
             this.p1Laps++;
             this.p1Checkpoints.clear();
             const lapTime = time - this.p1LapStartTime;
-            const isBestLap = lapTime < this.p1BestLap;
+            isBestLap = lapTime < this.p1BestLap;
             if (isBestLap) {
               this.p1BestLap = lapTime;
             }
@@ -407,18 +408,14 @@ export class F1Mode extends GameMode {
             this.p2Laps++;
             this.p2Checkpoints.clear();
             const lapTime = time - this.p2LapStartTime;
-            const isBestLap = lapTime < this.p2BestLap;
+            isBestLap = lapTime < this.p2BestLap;
             if (isBestLap) {
               this.p2BestLap = lapTime;
             }
             this.p2LapStartTime = time;
           }
 
-          const lapText =
-            (player === 'p1' ? this.p1BestLap : this.p2BestLap) ===
-            (player === 'p1' ? this.p1BestLap : this.p2BestLap)
-              ? '¡VUELTA!'
-              : '¡MEJOR VUELTA!';
+          const lapText = isBestLap ? '¡MEJOR VUELTA!' : '¡VUELTA!';
           this.scene.showFloatingText(
             car.x,
             car.y - 20,

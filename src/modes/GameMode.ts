@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { Engine } from '../core/Engine';
-import { PlayerID, WinnerType } from '../types';
+import { WinnerType } from '../types';
 
 export abstract class GameMode {
   protected engine: Engine;

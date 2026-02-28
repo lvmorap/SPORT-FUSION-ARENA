@@ -1,4 +1,4 @@
-import { ModeConfig, WinnerType, ModeResult, GameData } from '../types';
+import { ModeConfig, WinnerType, GameData } from '../types';
 
 export class Overlay {
   private container: HTMLElement;

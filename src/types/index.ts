@@ -76,8 +76,8 @@ export const MODE_CONFIGS: ModeConfig[] = [
     name: 'f1',
     displayName: 'FORMULA 3D',
     icon: '🏎️',
-    description: 'Carrera en circuito 3D. ¡Salirte de la pista penaliza 3 segundos!',
-    duration: 60,
+    description: '¡Carrera por vueltas con poderes! 3 vueltas para ganar. ¡Cuidado con los obstáculos!',
+    duration: 120,
     bgColor: 0x1a1a2a,
   },
 ];

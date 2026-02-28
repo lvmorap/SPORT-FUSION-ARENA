@@ -39,6 +39,10 @@ export abstract class GameMode {
     this.isActive = false;
   }
 
+  public isFinished(): boolean {
+    return false;
+  }
+
   protected addLighting(color = 0xffffff): void {
     const ambient = new THREE.AmbientLight(0xffffff, 0.4);
     this.engine.scene.add(ambient);

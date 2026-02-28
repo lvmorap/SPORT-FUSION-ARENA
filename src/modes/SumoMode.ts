@@ -555,7 +555,7 @@ export class SumoMode extends GameMode {
     const p1dx = this.p1Body.position.x - this.zoneX;
     const p1dz = this.p1Body.position.z - this.zoneZ;
     const p1DistSq = p1dx * p1dx + p1dz * p1dz;
-    if (p1DistSq < zoneRadiusSq) {
+    if (p1DistSq <= zoneRadiusSq) {
       this.scoreP1 += pointsPerSecond * delta;
     }
 
@@ -563,7 +563,7 @@ export class SumoMode extends GameMode {
     const p2dx = this.p2Body.position.x - this.zoneX;
     const p2dz = this.p2Body.position.z - this.zoneZ;
     const p2DistSq = p2dx * p2dx + p2dz * p2dz;
-    if (p2DistSq < zoneRadiusSq) {
+    if (p2DistSq <= zoneRadiusSq) {
       this.scoreP2 += pointsPerSecond * delta;
     }
   }

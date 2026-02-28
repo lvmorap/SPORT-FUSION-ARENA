@@ -32,6 +32,7 @@ export class FootballMode extends GameMode {
 
   // Goal scoring
   private goalCooldown = false;
+  private goalResetTimer: ReturnType<typeof setTimeout> | null = null;
   private flashOverlay!: THREE.Mesh;
 
   // Ground physics
@@ -40,6 +41,8 @@ export class FootballMode extends GameMode {
   private readonly FIELD_WIDTH = 30;
   private readonly FIELD_DEPTH = 20;
   private readonly PLAYER_SPEED = 60;
+  private readonly BALL_RADIUS = 0.3;
+  private readonly GOAL_LINE_X = 14;
 
   public setup(): void {
     this.scoreP1 = 0;
@@ -83,8 +86,8 @@ export class FootballMode extends GameMode {
     this.engine.syncPhysics();
 
     // Keep ball on the ground plane
-    if (this.ballBody.position.y < 0.3) {
-      this.ballBody.position.y = 0.3;
+    if (this.ballBody.position.y < this.BALL_RADIUS) {
+      this.ballBody.position.y = this.BALL_RADIUS;
       if (this.ballBody.velocity.y < 0) {
         this.ballBody.velocity.y = 0;
       }
@@ -101,6 +104,10 @@ export class FootballMode extends GameMode {
   }
 
   public cleanup(): void {
+    if (this.goalResetTimer !== null) {
+      clearTimeout(this.goalResetTimer);
+      this.goalResetTimer = null;
+    }
     this.engine.clearScene();
     this.fieldLines = [];
     this.wallBodies = [];
@@ -324,8 +331,8 @@ export class FootballMode extends GameMode {
   }
 
   private createBall(): void {
-    this.ballMesh = this.createBallMesh(0.3, COLORS.WHITE);
-    this.ballBody = this.createBallBody(0.3, 0, 0.3, 0, 1);
+    this.ballMesh = this.createBallMesh(this.BALL_RADIUS, COLORS.WHITE);
+    this.ballBody = this.createBallBody(this.BALL_RADIUS, 0, this.BALL_RADIUS, 0, 1);
     this.engine.addPhysicsObject(this.ballMesh, this.ballBody);
   }
 
@@ -365,14 +372,14 @@ export class FootballMode extends GameMode {
       bz > goalZ - this.goalHalfWidth && bz < goalZ + this.goalHalfWidth;
 
     // Ball crossed left goal line → P2 scores
-    if (bx < -14 && withinGoalZ) {
+    if (bx < -this.GOAL_LINE_X && withinGoalZ) {
       this.scoreP2++;
       this.onGoalScored(COLORS.P2);
       return;
     }
 
     // Ball crossed right goal line → P1 scores
-    if (bx > 14 && withinGoalZ) {
+    if (bx > this.GOAL_LINE_X && withinGoalZ) {
       this.scoreP1++;
       this.onGoalScored(COLORS.P1);
     }
@@ -387,14 +394,15 @@ export class FootballMode extends GameMode {
     flashMat.opacity = 0.6;
 
     // Reset ball after short delay
-    setTimeout(() => {
+    this.goalResetTimer = setTimeout(() => {
       this.resetBall();
       this.goalCooldown = false;
+      this.goalResetTimer = null;
     }, 800);
   }
 
   private resetBall(): void {
-    this.ballBody.position.set(0, 0.3, 0);
+    this.ballBody.position.set(0, this.BALL_RADIUS, 0);
     this.ballBody.velocity.set(0, 0, 0);
     this.ballBody.angularVelocity.set(0, 0, 0);
   }

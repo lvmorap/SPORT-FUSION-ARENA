@@ -100,7 +100,9 @@ export class FootballMode extends GameMode {
    *  UPDATE
    * ================================================================ */
   public update(delta: number): void {
-    if (!this.isActive) {return;}
+    if (!this.isActive) {
+      return;
+    }
 
     // ── Player movement ──
     this.handlePlayerMovement(this.p1Body, P1_CONTROLS, this.PLAYER_SPEED);
@@ -184,30 +186,42 @@ export class FootballMode extends GameMode {
 
     const world = this.engine.world;
 
-    world.addContactMaterial(new CANNON.ContactMaterial(this.matBall, this.matGround, {
-      friction: 0.4,
-      restitution: 0.6,
-    }));
-    world.addContactMaterial(new CANNON.ContactMaterial(this.matBall, this.matWall, {
-      friction: 0.1,
-      restitution: 0.8,
-    }));
-    world.addContactMaterial(new CANNON.ContactMaterial(this.matBall, this.matPlayer, {
-      friction: 0.3,
-      restitution: 0.5,
-    }));
-    world.addContactMaterial(new CANNON.ContactMaterial(this.matPlayer, this.matGround, {
-      friction: 0.9,
-      restitution: 0.0,
-    }));
-    world.addContactMaterial(new CANNON.ContactMaterial(this.matPlayer, this.matWall, {
-      friction: 0.2,
-      restitution: 0.1,
-    }));
-    world.addContactMaterial(new CANNON.ContactMaterial(this.matPlayer, this.matPlayer, {
-      friction: 0.3,
-      restitution: 0.2,
-    }));
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(this.matBall, this.matGround, {
+        friction: 0.4,
+        restitution: 0.6,
+      })
+    );
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(this.matBall, this.matWall, {
+        friction: 0.1,
+        restitution: 0.8,
+      })
+    );
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(this.matBall, this.matPlayer, {
+        friction: 0.3,
+        restitution: 0.5,
+      })
+    );
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(this.matPlayer, this.matGround, {
+        friction: 0.9,
+        restitution: 0.0,
+      })
+    );
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(this.matPlayer, this.matWall, {
+        friction: 0.2,
+        restitution: 0.1,
+      })
+    );
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(this.matPlayer, this.matPlayer, {
+        friction: 0.3,
+        restitution: 0.2,
+      })
+    );
   }
 
   /* ----------------------------------------------------------------
@@ -332,7 +346,15 @@ export class FootballMode extends GameMode {
     const wt = 0.5;
     const wh = this.WALL_HEIGHT;
 
-    const addWall = (sx: number, sy: number, sz: number, px: number, py: number, pz: number, visible: boolean): void => {
+    const addWall = (
+      sx: number,
+      sy: number,
+      sz: number,
+      px: number,
+      py: number,
+      pz: number,
+      visible: boolean
+    ): void => {
       const shape = new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2));
       const body = new CANNON.Body({ mass: 0, shape, material: this.matWall });
       body.position.set(px, py, pz);
@@ -387,9 +409,17 @@ export class FootballMode extends GameMode {
     const gw = this.GOAL_HALF_WIDTH * 2;
     const r = 0.18;
 
-    const postMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.8 });
+    const postMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.2,
+      metalness: 0.8,
+    });
     const glowMat = new THREE.MeshStandardMaterial({
-      color, emissive: color, emissiveIntensity: 1.5, roughness: 0.1, metalness: 0.3,
+      color,
+      emissive: color,
+      emissiveIntensity: 1.5,
+      roughness: 0.1,
+      metalness: 0.3,
     });
 
     const postGeo = new THREE.CylinderGeometry(r, r, ph, 12);
@@ -443,7 +473,11 @@ export class FootballMode extends GameMode {
     // Net
     const nd = 2;
     const netMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.2, side: THREE.DoubleSide, wireframe: true,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+      wireframe: true,
     });
     const ox = xPos < 0 ? -nd / 2 : nd / 2;
     const backGeo = new THREE.PlaneGeometry(gw, ph, 14, 8);
@@ -492,7 +526,11 @@ export class FootballMode extends GameMode {
     const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.5 });
     const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.1 });
     const shortsMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.2 });
+    const shoeMat = new THREE.MeshStandardMaterial({
+      color: 0x111111,
+      roughness: 0.4,
+      metalness: 0.2,
+    });
 
     // Torso
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55 * s, 0.6 * s, 0.35 * s), bodyMat);
@@ -509,34 +547,34 @@ export class FootballMode extends GameMode {
     // Arms
     const armGeo = new THREE.BoxGeometry(0.14 * s, 0.5 * s, 0.14 * s);
     const la = new THREE.Mesh(armGeo, skinMat);
-    la.position.set(-0.40 * s, 1.0 * s, 0);
+    la.position.set(-0.4 * s, 1.0 * s, 0);
     la.castShadow = true;
     group.add(la);
     const ra = new THREE.Mesh(armGeo, skinMat);
-    ra.position.set(0.40 * s, 1.0 * s, 0);
+    ra.position.set(0.4 * s, 1.0 * s, 0);
     ra.castShadow = true;
     group.add(ra);
 
     // Shorts
-    const hips = new THREE.Mesh(new THREE.BoxGeometry(0.50 * s, 0.22 * s, 0.32 * s), shortsMat);
-    hips.position.y = 0.60 * s;
+    const hips = new THREE.Mesh(new THREE.BoxGeometry(0.5 * s, 0.22 * s, 0.32 * s), shortsMat);
+    hips.position.y = 0.6 * s;
     hips.castShadow = true;
     group.add(hips);
 
     // Legs
     const legGeo = new THREE.BoxGeometry(0.16 * s, 0.45 * s, 0.16 * s);
     const ll = new THREE.Mesh(legGeo, skinMat);
-    ll.position.set(-0.15 * s, 0.30 * s, 0);
+    ll.position.set(-0.15 * s, 0.3 * s, 0);
     ll.castShadow = true;
     group.add(ll);
     const rl = new THREE.Mesh(legGeo, skinMat);
-    rl.position.set(0.15 * s, 0.30 * s, 0);
+    rl.position.set(0.15 * s, 0.3 * s, 0);
     rl.castShadow = true;
     rl.name = 'kickLeg';
     group.add(rl);
 
     // Shoes
-    const shoeGeo = new THREE.BoxGeometry(0.18 * s, 0.10 * s, 0.26 * s);
+    const shoeGeo = new THREE.BoxGeometry(0.18 * s, 0.1 * s, 0.26 * s);
     const lsh = new THREE.Mesh(shoeGeo, shoeMat);
     lsh.position.set(-0.15 * s, 0.05 * s, 0.02 * s);
     group.add(lsh);
@@ -547,7 +585,11 @@ export class FootballMode extends GameMode {
 
     // Team indicator ring
     const ringGeo = new THREE.TorusGeometry(0.55 * s, 0.05 * s, 8, 32);
-    const ringMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6 });
+    const ringMat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.6,
+    });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.position.y = 0.03;
     ring.rotation.x = Math.PI / 2;
@@ -649,8 +691,11 @@ export class FootballMode extends GameMode {
       const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2;
       const x = cx + r * Math.cos(angle);
       const y = cy + r * Math.sin(angle);
-      if (i === 0) {ctx.moveTo(x, y);}
-      else {ctx.lineTo(x, y);}
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
     }
     ctx.closePath();
     ctx.fill();
@@ -662,7 +707,10 @@ export class FootballMode extends GameMode {
   private createFlashOverlay(): void {
     const geo = new THREE.PlaneGeometry(120, 120);
     const mat = new THREE.MeshBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0, depthTest: false,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
     });
     this.flashOverlay = new THREE.Mesh(geo, mat);
     this.flashOverlay.position.set(0, 20, 0);
@@ -690,12 +738,26 @@ export class FootballMode extends GameMode {
 
     if (body.position.y < hh) {
       body.position.y = hh;
-      if (body.velocity.y < 0) {body.velocity.y = 0;}
+      if (body.velocity.y < 0) {
+        body.velocity.y = 0;
+      }
     }
-    if (body.position.x < -hw) { body.position.x = -hw; body.velocity.x = 0; }
-    if (body.position.x > hw) { body.position.x = hw; body.velocity.x = 0; }
-    if (body.position.z < -hd) { body.position.z = -hd; body.velocity.z = 0; }
-    if (body.position.z > hd) { body.position.z = hd; body.velocity.z = 0; }
+    if (body.position.x < -hw) {
+      body.position.x = -hw;
+      body.velocity.x = 0;
+    }
+    if (body.position.x > hw) {
+      body.position.x = hw;
+      body.velocity.x = 0;
+    }
+    if (body.position.z < -hd) {
+      body.position.z = -hd;
+      body.velocity.z = 0;
+    }
+    if (body.position.z > hd) {
+      body.position.z = hd;
+      body.velocity.z = 0;
+    }
   }
 
   private faceVelocity(mesh: THREE.Group, body: CANNON.Body): void {
@@ -707,7 +769,9 @@ export class FootballMode extends GameMode {
   }
 
   private handleJump(body: CANNON.Body, key: string): void {
-    if (!this.engine.input.wasPressed(key)) {return;}
+    if (!this.engine.input.wasPressed(key)) {
+      return;
+    }
     const hh = this.PLAYER_HALF_H;
     if (body.position.y < hh + 0.25) {
       body.velocity.y = this.JUMP_IMPULSE;
@@ -715,10 +779,15 @@ export class FootballMode extends GameMode {
   }
 
   private handleKick(body: CANNON.Body, key: string, pn: number): void {
-    if (!this.engine.input.wasPressed(key)) {return;}
+    if (!this.engine.input.wasPressed(key)) {
+      return;
+    }
 
-    if (pn === 1) {this.p1KickTimer = this.KICK_ANIM_DURATION;}
-    else {this.p2KickTimer = this.KICK_ANIM_DURATION;}
+    if (pn === 1) {
+      this.p1KickTimer = this.KICK_ANIM_DURATION;
+    } else {
+      this.p2KickTimer = this.KICK_ANIM_DURATION;
+    }
 
     const dx = this.ballBody.position.x - body.position.x;
     const dy = this.ballBody.position.y - body.position.y;
@@ -733,7 +802,7 @@ export class FootballMode extends GameMode {
       this.ballBody.velocity.set(0, 0, 0);
       this.ballBody.applyImpulse(
         new CANNON.Vec3(nx * this.KICK_FORCE, ny * this.KICK_FORCE * 0.7, nz * this.KICK_FORCE),
-        new CANNON.Vec3(0, 0, 0),
+        new CANNON.Vec3(0, 0, 0)
       );
     }
   }
@@ -743,23 +812,28 @@ export class FootballMode extends GameMode {
     const timer = pn === 1 ? this.p1KickTimer : this.p2KickTimer;
     const leg = mesh.getObjectByName('kickLeg');
     const shoe = mesh.getObjectByName('kickShoe');
-    if (!leg || !shoe) {return;}
+    if (!leg || !shoe) {
+      return;
+    }
 
     if (timer > 0) {
       const progress = 1 - timer / this.KICK_ANIM_DURATION;
       const swing = Math.sin(progress * Math.PI) * 1.2;
       leg.rotation.x = -swing;
-      leg.position.y = 0.30 * s + Math.sin(progress * Math.PI) * 0.12 * s;
+      leg.position.y = 0.3 * s + Math.sin(progress * Math.PI) * 0.12 * s;
       leg.position.z = -Math.sin(progress * Math.PI) * 0.3 * s;
       shoe.rotation.x = -swing * 0.8;
       shoe.position.y = 0.05 * s + Math.sin(progress * Math.PI) * 0.18 * s;
       shoe.position.z = 0.02 * s - Math.sin(progress * Math.PI) * 0.35 * s;
 
-      if (pn === 1) {this.p1KickTimer -= delta;}
-      else {this.p2KickTimer -= delta;}
+      if (pn === 1) {
+        this.p1KickTimer -= delta;
+      } else {
+        this.p2KickTimer -= delta;
+      }
     } else {
       leg.rotation.x = 0;
-      leg.position.set(0.15 * s, 0.30 * s, 0);
+      leg.position.set(0.15 * s, 0.3 * s, 0);
       shoe.rotation.x = 0;
       shoe.position.set(0.15 * s, 0.05 * s, 0.02 * s);
     }
@@ -798,19 +872,38 @@ export class FootballMode extends GameMode {
     const r = this.BALL_RADIUS;
     const b = this.ballBody;
 
-    if (b.position.x < -hw + r) { b.position.x = -hw + r; b.velocity.x = Math.abs(b.velocity.x) * this.WALL_BOUNCE_DAMPING; }
-    if (b.position.x > hw - r)  { b.position.x = hw - r;  b.velocity.x = -Math.abs(b.velocity.x) * this.WALL_BOUNCE_DAMPING; }
-    if (b.position.z < -hd + r) { b.position.z = -hd + r; b.velocity.z = Math.abs(b.velocity.z) * this.WALL_BOUNCE_DAMPING; }
-    if (b.position.z > hd - r)  { b.position.z = hd - r;  b.velocity.z = -Math.abs(b.velocity.z) * this.WALL_BOUNCE_DAMPING; }
+    if (b.position.x < -hw + r) {
+      b.position.x = -hw + r;
+      b.velocity.x = Math.abs(b.velocity.x) * this.WALL_BOUNCE_DAMPING;
+    }
+    if (b.position.x > hw - r) {
+      b.position.x = hw - r;
+      b.velocity.x = -Math.abs(b.velocity.x) * this.WALL_BOUNCE_DAMPING;
+    }
+    if (b.position.z < -hd + r) {
+      b.position.z = -hd + r;
+      b.velocity.z = Math.abs(b.velocity.z) * this.WALL_BOUNCE_DAMPING;
+    }
+    if (b.position.z > hd - r) {
+      b.position.z = hd - r;
+      b.velocity.z = -Math.abs(b.velocity.z) * this.WALL_BOUNCE_DAMPING;
+    }
     // Floor bounce is handled by physics, but add safety net
-    if (b.position.y < r) { b.position.y = r; if (b.velocity.y < 0) {b.velocity.y *= -this.FLOOR_BOUNCE_DAMPING;} }
+    if (b.position.y < r) {
+      b.position.y = r;
+      if (b.velocity.y < 0) {
+        b.velocity.y *= -this.FLOOR_BOUNCE_DAMPING;
+      }
+    }
   }
 
   /* ================================================================
    *  GOAL DETECTION
    * ================================================================ */
   private checkGoals(): void {
-    if (this.goalCooldown) {return;}
+    if (this.goalCooldown) {
+      return;
+    }
 
     const bx = this.ballBody.position.x;
     const bz = this.ballBody.position.z;

@@ -594,9 +594,7 @@ export class SumoMode extends GameMode {
           nz * this.PUSH_FORCE * relDot * 0.02
         );
         this.p2Body.applyImpulse(pushImpulse);
-        this.p1Body.applyImpulse(
-          new CANNON.Vec3(-pushImpulse.x, 0, -pushImpulse.z)
-        );
+        this.p1Body.applyImpulse(new CANNON.Vec3(-pushImpulse.x, 0, -pushImpulse.z));
       }
     }
   }

@@ -31,12 +31,7 @@ export class Engine {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0x050510, 0.015);
 
-    this.camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      500
-    );
+    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
     this.camera.position.set(0, 20, 25);
     this.camera.lookAt(0, 0, 0);
 
@@ -70,9 +65,7 @@ export class Engine {
   public removePhysicsObject(mesh: THREE.Object3D, body: CANNON.Body): void {
     this.scene.remove(mesh);
     this.world.removeBody(body);
-    this.physicsObjects = this.physicsObjects.filter(
-      (o) => o.mesh !== mesh || o.body !== body
-    );
+    this.physicsObjects = this.physicsObjects.filter((o) => o.mesh !== mesh || o.body !== body);
   }
 
   public syncPhysics(): void {

@@ -80,13 +80,19 @@ export class Overlay {
   public updateScore(p1: number, p2: number): void {
     const s1 = document.getElementById('score-p1');
     const s2 = document.getElementById('score-p2');
-    if (s1) { s1.textContent = String(p1); }
-    if (s2) { s2.textContent = String(p2); }
+    if (s1) {
+      s1.textContent = String(p1);
+    }
+    if (s2) {
+      s2.textContent = String(p2);
+    }
   }
 
   public updateTimer(seconds: number): void {
     const t = document.getElementById('timer');
-    if (t) { t.textContent = String(Math.max(0, Math.ceil(seconds))); }
+    if (t) {
+      t.textContent = String(Math.max(0, Math.ceil(seconds)));
+    }
   }
 
   public showResult(
@@ -97,7 +103,8 @@ export class Overlay {
     onNext: () => void
   ): void {
     const winnerClass = winner === 'P1' ? 'p1' : winner === 'P2' ? 'p2' : 'draw';
-    const winnerText = winner === 'P1' ? '¡JUGADOR 1 GANA!' : winner === 'P2' ? '¡JUGADOR 2 GANA!' : '¡EMPATE!';
+    const winnerText =
+      winner === 'P1' ? '¡JUGADOR 1 GANA!' : winner === 'P2' ? '¡JUGADOR 2 GANA!' : '¡EMPATE!';
     this.container.innerHTML = `
       <div class="overlay-screen">
         <div style="font-size:14px;color:rgba(255,255,255,0.4);letter-spacing:4px;margin-bottom:20px;">
@@ -115,7 +122,8 @@ export class Overlay {
   }
 
   public showFinal(data: GameData, onRestart: () => void): void {
-    const champion = data.winsP1 > data.winsP2 ? 'JUGADOR 1' : data.winsP2 > data.winsP1 ? 'JUGADOR 2' : 'EMPATE';
+    const champion =
+      data.winsP1 > data.winsP2 ? 'JUGADOR 1' : data.winsP2 > data.winsP1 ? 'JUGADOR 2' : 'EMPATE';
     const champClass = data.winsP1 > data.winsP2 ? 'p1' : data.winsP2 > data.winsP1 ? 'p2' : 'draw';
     let resultsHtml = '';
     for (const r of data.results) {

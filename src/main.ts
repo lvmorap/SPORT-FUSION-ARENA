@@ -127,11 +127,16 @@ function clearMenuScene(): void {
 // --- Mode factory ---
 function createMode(name: ModeName): GameMode {
   switch (name) {
-    case 'football': return new FootballMode(engine);
-    case 'sumo': return new SumoMode(engine);
-    case 'pingpong': return new PingPongMode(engine);
-    case 'golf': return new GolfMode(engine);
-    case 'f1': return new F1Mode(engine);
+    case 'football':
+      return new FootballMode(engine);
+    case 'sumo':
+      return new SumoMode(engine);
+    case 'pingpong':
+      return new PingPongMode(engine);
+    case 'golf':
+      return new GolfMode(engine);
+    case 'f1':
+      return new F1Mode(engine);
   }
 }
 
@@ -207,8 +212,11 @@ function goToResult(): void {
     };
     gameData.results.push(result);
 
-    if (winner === 'P1') { gameData.winsP1++; }
-    else if (winner === 'P2') { gameData.winsP2++; }
+    if (winner === 'P1') {
+      gameData.winsP1++;
+    } else if (winner === 'P2') {
+      gameData.winsP2++;
+    }
 
     overlay.showResult(winner, scoreP1, scoreP2, config.displayName, () => {
       // Clean up current mode

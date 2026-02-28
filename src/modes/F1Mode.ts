@@ -85,7 +85,9 @@ export class F1Mode extends GameMode {
   }
 
   public update(delta: number): void {
-    if (!this.isActive) { return; }
+    if (!this.isActive) {
+      return;
+    }
 
     this.updateCar(this.stateP1, P1_CONTROLS, delta);
     this.updateCar(this.stateP2, P2_CONTROLS, delta);
@@ -176,7 +178,9 @@ export class F1Mode extends GameMode {
     const segments = 60;
     const dashRatio = 0.5;
     for (let i = 0; i < segments; i++) {
-      if (i % 2 !== 0) { continue; }
+      if (i % 2 !== 0) {
+        continue;
+      }
       const a1 = (i / segments) * Math.PI * 2;
       const a2 = ((i + dashRatio) / segments) * Math.PI * 2;
       const mid = (a1 + a2) / 2;
@@ -186,11 +190,7 @@ export class F1Mode extends GameMode {
       const dash = new THREE.Mesh(geo, mat);
       dash.rotation.x = -Math.PI / 2;
       dash.rotation.z = -mid;
-      dash.position.set(
-        Math.cos(mid) * radius,
-        y,
-        Math.sin(mid) * radius,
-      );
+      dash.position.set(Math.cos(mid) * radius, y, Math.sin(mid) * radius);
       this.addToScene(dash);
     }
   }
@@ -203,7 +203,7 @@ export class F1Mode extends GameMode {
       const a2 = ((i + 1) / segments) * Math.PI * 2;
       const mid = (a1 + a2) / 2;
       const color = i % 2 === 0 ? 0xff0000 : 0xffffff;
-      const arcLen = ((a2 - a1) * TRACK_INNER_RADIUS) + 0.02;
+      const arcLen = (a2 - a1) * TRACK_INNER_RADIUS + 0.02;
       const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
 
       // Inner kerb
@@ -214,22 +214,19 @@ export class F1Mode extends GameMode {
       kerbIn.position.set(
         Math.cos(mid) * (TRACK_INNER_RADIUS + kerbWidth / 2),
         TRACK_Y + 0.005,
-        Math.sin(mid) * (TRACK_INNER_RADIUS + kerbWidth / 2),
+        Math.sin(mid) * (TRACK_INNER_RADIUS + kerbWidth / 2)
       );
       this.addToScene(kerbIn);
 
       // Outer kerb
-      const geoOut = new THREE.PlaneGeometry(
-        ((a2 - a1) * TRACK_OUTER_RADIUS) + 0.02,
-        kerbWidth,
-      );
+      const geoOut = new THREE.PlaneGeometry((a2 - a1) * TRACK_OUTER_RADIUS + 0.02, kerbWidth);
       const kerbOut = new THREE.Mesh(geoOut, mat);
       kerbOut.rotation.x = -Math.PI / 2;
       kerbOut.rotation.z = -mid;
       kerbOut.position.set(
         Math.cos(mid) * (TRACK_OUTER_RADIUS - kerbWidth / 2),
         TRACK_Y + 0.005,
-        Math.sin(mid) * (TRACK_OUTER_RADIUS - kerbWidth / 2),
+        Math.sin(mid) * (TRACK_OUTER_RADIUS - kerbWidth / 2)
       );
       this.addToScene(kerbOut);
     }
@@ -249,7 +246,9 @@ export class F1Mode extends GameMode {
     const rows = Math.floor(1.2 / tileSize);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if ((r + c) % 2 === 0) { continue; }
+        if ((r + c) % 2 === 0) {
+          continue;
+        }
         const tGeo = new THREE.PlaneGeometry(tileSize, tileSize);
         const tMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
         const tile = new THREE.Mesh(tGeo, tMat);
@@ -257,7 +256,7 @@ export class F1Mode extends GameMode {
         tile.position.set(
           TRACK_INNER_RADIUS + tileSize / 2 + c * tileSize,
           TRACK_Y + 0.01,
-          -1.2 / 2 + tileSize / 2 + r * tileSize,
+          -1.2 / 2 + tileSize / 2 + r * tileSize
         );
         this.addToScene(tile);
       }
@@ -360,7 +359,7 @@ export class F1Mode extends GameMode {
   private updateCar(
     state: CarState,
     controls: { up: string; down: string; left: string; right: string },
-    delta: number,
+    delta: number
   ): void {
     const input = this.engine.input;
     const effectiveMax = state.penaltyTimer > 0 ? MAX_SPEED * PENALTY_SPEED_FACTOR : MAX_SPEED;
@@ -442,22 +441,14 @@ export class F1Mode extends GameMode {
   // --- Penalty labels ---
 
   private updatePenaltyLabels(): void {
-    this.penaltyLabelP1 = this.updatePenaltyLabel(
-      this.penaltyLabelP1,
-      this.stateP1,
-      this.carP1,
-    );
-    this.penaltyLabelP2 = this.updatePenaltyLabel(
-      this.penaltyLabelP2,
-      this.stateP2,
-      this.carP2,
-    );
+    this.penaltyLabelP1 = this.updatePenaltyLabel(this.penaltyLabelP1, this.stateP1, this.carP1);
+    this.penaltyLabelP2 = this.updatePenaltyLabel(this.penaltyLabelP2, this.stateP2, this.carP2);
   }
 
   private updatePenaltyLabel(
     existing: THREE.Sprite | null,
     state: CarState,
-    car: THREE.Group,
+    car: THREE.Group
   ): THREE.Sprite | null {
     if (state.penaltyTimer > 0) {
       if (!existing) {

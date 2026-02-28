@@ -26,8 +26,12 @@ export abstract class GameMode {
   }
 
   public getWinner(): WinnerType {
-    if (this.scoreP1 > this.scoreP2) { return 'P1'; }
-    if (this.scoreP2 > this.scoreP1) { return 'P2'; }
+    if (this.scoreP1 > this.scoreP2) {
+      return 'P1';
+    }
+    if (this.scoreP2 > this.scoreP1) {
+      return 'P2';
+    }
     return 'DRAW';
   }
 
@@ -196,10 +200,18 @@ export abstract class GameMode {
     const force = new CANNON.Vec3(0, 0, 0);
     const input = this.engine.input;
 
-    if (input.isDown(controls.up)) { force.z -= speed; }
-    if (input.isDown(controls.down)) { force.z += speed; }
-    if (input.isDown(controls.left)) { force.x -= speed; }
-    if (input.isDown(controls.right)) { force.x += speed; }
+    if (input.isDown(controls.up)) {
+      force.z -= speed;
+    }
+    if (input.isDown(controls.down)) {
+      force.z += speed;
+    }
+    if (input.isDown(controls.left)) {
+      force.x -= speed;
+    }
+    if (input.isDown(controls.right)) {
+      force.x += speed;
+    }
 
     body.applyForce(force);
   }

@@ -76,7 +76,7 @@ export const MODE_CONFIGS: ModeConfig[] = [
     name: 'f1',
     displayName: 'FORMULA 3D',
     icon: '🏎️',
-    description: '¡Carrera por vueltas con poderes! 3 vueltas para ganar. ¡Cuidado con los obstáculos!',
+    description: '¡Estilo TRON! Deja estela de luz que noquea rivales 1s. Turbo con cooldown (F/Shift). 3 vueltas para ganar.',
     duration: 120,
     bgColor: 0x1a1a2a,
   },

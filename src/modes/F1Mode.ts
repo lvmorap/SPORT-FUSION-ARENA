@@ -52,6 +52,15 @@ const OBSTACLE_SLOW_DURATION = 1.5;
 const OBSTACLE_LIFETIME = 15;
 const OBSTACLE_HIT_RADIUS = 1.5;
 
+const TRAIL_STUN_DURATION = 1;
+const TRAIL_SEGMENT_SPACING = 0.6;
+const TRAIL_MAX_SEGMENTS = 100;
+const TRAIL_HIT_RADIUS = 0.5;
+
+const TURBO_ABILITY_SPEED_MULT = 2.0;
+const TURBO_ABILITY_DURATION = 1.5;
+const TURBO_COOLDOWN = 5;
+
 const POWERUP_SPAWN_MIN = 4;
 const POWERUP_SPAWN_MAX = 8;
 const POWERUP_MAX_COUNT = 3;
@@ -82,6 +91,9 @@ interface CarState {
   mirrorTimer: number;
   turboTimer: number;
   obstacleSlowTimer: number;
+  stunTimer: number;
+  turboAbilityTimer: number;
+  turboCooldown: number;
 }
 
 interface PowerUpItem {
@@ -94,6 +106,12 @@ interface ObstacleItem {
   position: THREE.Vector3;
   mesh: THREE.Group;
   timer: number;
+}
+
+interface TrailSegment {
+  x: number;
+  z: number;
+  mesh: THREE.Mesh;
 }
 
 // ─── F1Mode ───────────────────────────────────────────────────
@@ -114,6 +132,13 @@ export class F1Mode extends GameMode {
   private penaltyLabelP2: THREE.Sprite | null = null;
   private labelTextP1 = '';
   private labelTextP2 = '';
+  private trailP1: TrailSegment[] = [];
+  private trailP2: TrailSegment[] = [];
+  private lastTrailPosP1 = { x: 0, z: 0 };
+  private lastTrailPosP2 = { x: 0, z: 0 };
+  private trailGeo!: THREE.BoxGeometry;
+  private trailMatP1!: THREE.MeshStandardMaterial;
+  private trailMatP2!: THREE.MeshStandardMaterial;
 
   // ─── Lifecycle ──────────────────────────────────────────────
 
@@ -151,10 +176,27 @@ export class F1Mode extends GameMode {
     this.placeCarAtStart(this.stateP2, 1.2);
     this.syncCarMesh(this.carP1, this.stateP1);
     this.syncCarMesh(this.carP2, this.stateP2);
+
+    this.trailP1 = [];
+    this.trailP2 = [];
+    this.trailGeo = new THREE.BoxGeometry(0.4, 0.5, 0.4);
+    this.trailMatP1 = new THREE.MeshStandardMaterial({
+      color: COLORS.P1, emissive: COLORS.P1, emissiveIntensity: 0.8,
+      transparent: true, opacity: 0.7,
+    });
+    this.trailMatP2 = new THREE.MeshStandardMaterial({
+      color: COLORS.P2, emissive: COLORS.P2, emissiveIntensity: 0.8,
+      transparent: true, opacity: 0.7,
+    });
+    this.lastTrailPosP1 = { x: this.stateP1.x, z: this.stateP1.z };
+    this.lastTrailPosP2 = { x: this.stateP2.x, z: this.stateP2.z };
   }
 
   public update(delta: number): void {
     if (!this.isActive) { return; }
+
+    this.handleTurboAbility(this.stateP1, P1_CONTROLS);
+    this.handleTurboAbility(this.stateP2, P2_CONTROLS);
 
     this.updateCar(this.stateP1, P1_CONTROLS, delta);
     this.updateCar(this.stateP2, P2_CONTROLS, delta);
@@ -172,6 +214,9 @@ export class F1Mode extends GameMode {
     this.checkObstacleCollisions(this.stateP1);
     this.checkObstacleCollisions(this.stateP2);
     this.animatePowerUps();
+
+    this.dropTrailSegments();
+    this.checkTrailCollisions();
 
     this.syncCarMesh(this.carP1, this.stateP1);
     this.syncCarMesh(this.carP2, this.stateP2);
@@ -192,6 +237,8 @@ export class F1Mode extends GameMode {
     this.labelTextP2 = '';
     this.powerUps = [];
     this.obstacles = [];
+    this.trailP1 = [];
+    this.trailP2 = [];
   }
 
   public isFinished(): boolean {
@@ -223,6 +270,7 @@ export class F1Mode extends GameMode {
       laps: 0, nextCheckpoint: 1,
       penaltyTimer: 0, onTrack: true,
       mirrorTimer: 0, turboTimer: 0, obstacleSlowTimer: 0,
+      stunTimer: 0, turboAbilityTimer: 0, turboCooldown: 0,
     };
   }
 
@@ -232,9 +280,13 @@ export class F1Mode extends GameMode {
 
   private getActivePowerInfo(state: CarState): string {
     const effects: string[] = [];
+    if (state.stunTimer > 0) { effects.push(`💥 ${Math.ceil(state.stunTimer)}s`); }
     if (state.mirrorTimer > 0) { effects.push(`🪞 ${Math.ceil(state.mirrorTimer)}s`); }
     if (state.turboTimer > 0) { effects.push(`⚡ ${Math.ceil(state.turboTimer)}s`); }
+    if (state.turboAbilityTimer > 0) { effects.push(`🚀 ${Math.ceil(state.turboAbilityTimer)}s`); }
     if (state.obstacleSlowTimer > 0) { effects.push(`🛑 ${Math.ceil(state.obstacleSlowTimer)}s`); }
+    if (state.turboCooldown > 0) { effects.push(`🔄 ${Math.ceil(state.turboCooldown)}s`); }
+    else if (state.turboAbilityTimer <= 0) { effects.push('🚀 LISTO'); }
     return effects.join(' ');
   }
 
@@ -546,9 +598,15 @@ export class F1Mode extends GameMode {
   ): void {
     const input = this.engine.input;
 
+    if (state.stunTimer > 0) {
+      state.speed = 0;
+      return;
+    }
+
     let effectiveMax = MAX_SPEED;
     if (state.penaltyTimer > 0) { effectiveMax *= PENALTY_SPEED_FACTOR; }
     if (state.turboTimer > 0) { effectiveMax *= TURBO_SPEED_MULT; }
+    if (state.turboAbilityTimer > 0) { effectiveMax *= TURBO_ABILITY_SPEED_MULT; }
     if (state.obstacleSlowTimer > 0) { effectiveMax *= OBSTACLE_SLOW_FACTOR; }
 
     if (input.isDown(controls.up)) {
@@ -600,6 +658,9 @@ export class F1Mode extends GameMode {
     if (state.mirrorTimer > 0) { state.mirrorTimer = Math.max(0, state.mirrorTimer - delta); }
     if (state.turboTimer > 0) { state.turboTimer = Math.max(0, state.turboTimer - delta); }
     if (state.obstacleSlowTimer > 0) { state.obstacleSlowTimer = Math.max(0, state.obstacleSlowTimer - delta); }
+    if (state.stunTimer > 0) { state.stunTimer = Math.max(0, state.stunTimer - delta); }
+    if (state.turboAbilityTimer > 0) { state.turboAbilityTimer = Math.max(0, state.turboAbilityTimer - delta); }
+    if (state.turboCooldown > 0) { state.turboCooldown = Math.max(0, state.turboCooldown - delta); }
   }
 
   // ─── Checkpoints & Laps ─────────────────────────────────────
@@ -788,6 +849,63 @@ export class F1Mode extends GameMode {
     }
   }
 
+  // ─── Tron Trail & Turbo Ability ─────────────────────────────
+
+  private handleTurboAbility(state: CarState, controls: PlayerControls): void {
+    if (state.stunTimer > 0) { return; }
+    if (this.engine.input.isDown(controls.action1) && state.turboCooldown <= 0 && state.turboAbilityTimer <= 0) {
+      state.turboAbilityTimer = TURBO_ABILITY_DURATION;
+      state.turboCooldown = TURBO_COOLDOWN;
+    }
+  }
+
+  private dropTrailSegments(): void {
+    this.dropTrailForPlayer(this.stateP1, this.lastTrailPosP1, this.trailP1, this.trailMatP1);
+    this.dropTrailForPlayer(this.stateP2, this.lastTrailPosP2, this.trailP2, this.trailMatP2);
+  }
+
+  private dropTrailForPlayer(
+    state: CarState,
+    lastPos: { x: number; z: number },
+    trail: TrailSegment[],
+    material: THREE.MeshStandardMaterial,
+  ): void {
+    const dx = state.x - lastPos.x;
+    const dz = state.z - lastPos.z;
+    if (dx * dx + dz * dz < TRAIL_SEGMENT_SPACING * TRAIL_SEGMENT_SPACING) { return; }
+
+    const mesh = new THREE.Mesh(this.trailGeo, material);
+    mesh.position.set(lastPos.x, 0.25, lastPos.z);
+    this.addToScene(mesh);
+    trail.push({ x: lastPos.x, z: lastPos.z, mesh });
+
+    lastPos.x = state.x;
+    lastPos.z = state.z;
+
+    while (trail.length > TRAIL_MAX_SEGMENTS) {
+      const old = trail.shift();
+      if (old) { this.removeFromScene(old.mesh); }
+    }
+  }
+
+  private checkTrailCollisions(): void {
+    this.checkTrailHit(this.stateP1, this.trailP2);
+    this.checkTrailHit(this.stateP2, this.trailP1);
+  }
+
+  private checkTrailHit(state: CarState, opponentTrail: TrailSegment[]): void {
+    if (state.stunTimer > 0) { return; }
+    for (const seg of opponentTrail) {
+      const dx = state.x - seg.x;
+      const dz = state.z - seg.z;
+      if (dx * dx + dz * dz < TRAIL_HIT_RADIUS * TRAIL_HIT_RADIUS) {
+        state.stunTimer = TRAIL_STUN_DURATION;
+        state.speed = 0;
+        break;
+      }
+    }
+  }
+
   // ─── Labels ─────────────────────────────────────────────────
 
   private updatePenaltyLabels(): void {
@@ -814,11 +932,13 @@ export class F1Mode extends GameMode {
     const hasMirror = state.mirrorTimer > 0;
     const hasTurbo = state.turboTimer > 0;
     const hasSlow = state.obstacleSlowTimer > 0;
-    const hasEffect = hasPenalty || hasMirror || hasTurbo || hasSlow;
+    const hasStun = state.stunTimer > 0;
+    const hasTurboAbility = state.turboAbilityTimer > 0;
+    const hasEffect = hasPenalty || hasMirror || hasTurbo || hasSlow || hasStun || hasTurboAbility;
 
     if (hasEffect) {
-      const text = hasPenalty ? 'PENALTY' : hasMirror ? '🪞 MIRROR' : hasTurbo ? '⚡ TURBO' : '🛑 SLOW';
-      const color = hasPenalty ? COLORS.DANGER : hasMirror ? 0xaa44ff : hasTurbo ? 0xffee00 : 0xff4444;
+      const text = hasStun ? '💥 STUNNED' : hasPenalty ? 'PENALTY' : hasTurboAbility ? '🚀 TURBO' : hasMirror ? '🪞 MIRROR' : hasTurbo ? '⚡ TURBO' : '🛑 SLOW';
+      const color = hasStun ? 0xff0000 : hasPenalty ? COLORS.DANGER : hasTurboAbility ? 0x00ffff : hasMirror ? 0xaa44ff : hasTurbo ? 0xffee00 : 0xff4444;
 
       if (!existing || currentText !== text) {
         if (existing) {

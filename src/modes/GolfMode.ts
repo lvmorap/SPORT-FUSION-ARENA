@@ -45,6 +45,7 @@ export class GolfMode extends GameMode {
   private readonly WALL_HEIGHT = 0.35;
   private readonly WALL_THICKNESS = 0.25;
   private readonly BARRIER_HEIGHT = 0.3;
+  private readonly BARRIER_THICKNESS = 0.3;
   private readonly WALL_COLOR = 0x404040;
   private readonly SURFACE_COLOR = 0x44dd44;
 
@@ -254,7 +255,7 @@ export class GolfMode extends GameMode {
 
   private createSection2Obstacles(): void {
     const bh = this.BARRIER_HEIGHT;
-    const bt = 0.3;
+    const bt = this.BARRIER_THICKNESS;
     const c = this.WALL_COLOR;
 
     // Zig-zag barriers alternating sides (gap ≈ 1 unit for ball)

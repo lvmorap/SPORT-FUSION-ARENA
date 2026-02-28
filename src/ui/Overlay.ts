@@ -20,7 +20,7 @@ export class Overlay {
       <div class="overlay-screen">
         <div class="overlay-title">SPORT FUSION</div>
         <div class="overlay-title" style="font-size:40px;margin-top:-10px;">ARENA 3D</div>
-        <div class="overlay-subtitle">5 deportes reinventados en 3 dimensiones</div>
+        <div class="overlay-subtitle">4 deportes reinventados en 3 dimensiones</div>
         <button class="overlay-btn" id="start-btn">COMENZAR</button>
         <div style="margin-top:30px;font-size:13px;color:rgba(255,255,255,0.4);letter-spacing:2px;font-family:'Rajdhani',sans-serif;">
           P1: WASD + F/G &nbsp;&nbsp;|&nbsp;&nbsp; P2: FLECHAS + SHIFT/ENTER
@@ -37,7 +37,7 @@ export class Overlay {
     this.container.innerHTML = `
       <div class="overlay-screen mode-intro">
         <div style="font-size:12px;color:rgba(255,255,255,0.4);letter-spacing:4px;margin-bottom:20px;">
-          MODO ${modeIndex + 1} DE 5
+          MODO ${modeIndex + 1} DE 4
         </div>
         <div class="mode-icon">${config.icon}</div>
         <div class="mode-name">${config.displayName}</div>

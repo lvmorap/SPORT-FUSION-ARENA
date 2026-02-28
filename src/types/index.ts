@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 
-export type ModeName = 'football' | 'sumo' | 'pingpong' | 'golf' | 'f1';
+export type ModeName = 'football' | 'sumo' | 'pingpong' | 'f1';
 export type WinnerType = 'P1' | 'P2' | 'DRAW';
 export type PlayerID = 'P1' | 'P2';
 export type GameState = 'menu' | 'intro' | 'countdown' | 'playing' | 'result' | 'final';
@@ -63,14 +63,6 @@ export const MODE_CONFIGS: ModeConfig[] = [
     description: 'La pelota acelera con cada golpe. ¡Los reflejos lo son todo!',
     duration: 60,
     bgColor: 0x0a0a3a,
-  },
-  {
-    name: 'golf',
-    displayName: 'GOLF DUAL',
-    icon: '⛳',
-    description: 'Dos pelotas compiten al mismo tiempo. ¡Llega al hoyo primero!',
-    duration: 60,
-    bgColor: 0x0a3a1a,
   },
   {
     name: 'f1',

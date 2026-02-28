@@ -459,12 +459,19 @@ export class F1Mode extends GameMode {
 
   public cleanup(): void {
     this.trackGraphics?.destroy();
+    this.trackGraphics = null;
     this.lapText?.destroy();
+    this.lapText = null;
     this.speedText?.destroy();
+    this.speedText = null;
     this.trailGraphics?.destroy();
+    this.trailGraphics = null;
     this.bg?.destroy();
+    this.bg = null;
     this.p1Car?.destroy();
+    this.p1Car = null;
     this.p2Car?.destroy();
+    this.p2Car = null;
   }
 
   public get modeName(): 'f1' {

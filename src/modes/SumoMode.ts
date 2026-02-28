@@ -280,9 +280,13 @@ export class SumoMode extends GameMode {
 
   public cleanup(): void {
     this.zoneGraphics?.destroy();
+    this.zoneGraphics = null;
     this.bg?.destroy();
+    this.bg = null;
     this.p1?.destroy();
+    this.p1 = null;
     this.p2?.destroy();
+    this.p2 = null;
   }
 
   public get modeName(): 'sumo' {

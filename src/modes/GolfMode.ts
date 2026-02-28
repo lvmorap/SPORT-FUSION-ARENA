@@ -27,31 +27,27 @@ export class GolfMode extends GameMode {
   private obstacleBodies: CANNON.Body[] = [];
   private obstacleMeshes: THREE.Object3D[] = [];
 
-  // Shared physics materials
+  // Shared physics material
   private readonly wallMaterial = new CANNON.Material({ restitution: 0.8 });
-  private readonly bumperMaterial = new CANNON.Material({ restitution: 1.0 });
 
-  // Windmill
-  private windmillBlades!: THREE.Group;
-  private windmillBladeBodies: CANNON.Body[] = [];
-  private readonly WINDMILL_X = 0;
-  private readonly WINDMILL_Z = -4;
-  private readonly WINDMILL_ROTATION_SPEED = 1.2;
-
-  // Hole
+  // Hole — spec: (X=0, Y=20.5) mapped to Three.js (x=0, z=-20.5)
   private readonly HOLE_X = 0;
-  private readonly HOLE_Z = -12;
-  private readonly HOLE_RADIUS = 0.5;
-
-  // Course dimensions
-  private readonly COURSE_WIDTH = 20;
-  private readonly COURSE_DEPTH = 30;
+  private readonly HOLE_Z = -20.5;
+  private readonly HOLE_RADIUS = 0.2;
 
   // Ball
-  private readonly BALL_RADIUS = 0.2;
+  private readonly BALL_RADIUS = 0.1;
   private readonly MAX_CHARGE = 2;
   private readonly MAX_POWER = 18;
   private readonly STROKE_SCORES = [10, 7, 5, 3, 2, 1];
+
+  // Course layout constants
+  private readonly WALL_HEIGHT = 0.35;
+  private readonly WALL_THICKNESS = 0.25;
+  private readonly BARRIER_HEIGHT = 0.3;
+  private readonly BARRIER_THICKNESS = 0.3;
+  private readonly WALL_COLOR = 0x404040;
+  private readonly SURFACE_COLOR = 0x44dd44;
 
   // Reset cooldown
   private p1ResetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -68,15 +64,16 @@ export class GolfMode extends GameMode {
 
     this.setupCamera();
     this.addLighting(0x88ff88);
-    this.createCourse();
-    this.createWalls();
-    this.createHole();
-    this.createObstacles();
-    this.createWindmill();
-    this.createSandTraps();
     this.createGround();
-    this.p1 = this.createPlayer(COLORS.P1, -2, 10);
-    this.p2 = this.createPlayer(COLORS.P2, 2, 10);
+    this.createSurroundingTerrain();
+    this.createCourseSurface();
+    this.createPerimeterWalls();
+    this.createSection1Obstacles();
+    this.createSection2Obstacles();
+    this.createSection3Obstacles();
+    this.createHole();
+    this.p1 = this.createPlayer(COLORS.P1, -0.5, -1);
+    this.p2 = this.createPlayer(COLORS.P2, 0.5, -1);
   }
 
   public update(delta: number): void {
@@ -86,10 +83,6 @@ export class GolfMode extends GameMode {
 
     this.updatePlayer(this.p1, P1_CONTROLS, delta);
     this.updatePlayer(this.p2, P2_CONTROLS, delta);
-
-    // Rotate windmill blades
-    this.windmillBlades.rotation.y += this.WINDMILL_ROTATION_SPEED * delta;
-    this.updateWindmillPhysics();
 
     this.engine.syncPhysics();
 
@@ -118,32 +111,17 @@ export class GolfMode extends GameMode {
     this.wallBodies = [];
     this.obstacleBodies = [];
     this.obstacleMeshes = [];
-    this.windmillBladeBodies = [];
     this.engine.clearScene();
   }
 
   // --- Camera ---
 
   private setupCamera(): void {
-    this.engine.camera.position.set(0, 30, 20);
-    this.engine.camera.lookAt(0, 0, -2);
+    this.engine.camera.position.set(0, 28, 8);
+    this.engine.camera.lookAt(0, 0, -11);
   }
 
-  // --- Course ---
-
-  private createCourse(): void {
-    const geo = new THREE.PlaneGeometry(this.COURSE_WIDTH, this.COURSE_DEPTH);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x2d8a4e,
-      roughness: 0.9,
-      metalness: 0.0,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(0, 0, -1);
-    mesh.receiveShadow = true;
-    this.engine.scene.add(mesh);
-  }
+  // --- Ground & Terrain ---
 
   private createGround(): void {
     this.groundBody = new CANNON.Body({
@@ -154,24 +132,159 @@ export class GolfMode extends GameMode {
     this.engine.world.addBody(this.groundBody);
   }
 
-  // --- Walls ---
-
-  private createWalls(): void {
-    const hw = this.COURSE_WIDTH / 2;
-    const hd = this.COURSE_DEPTH / 2;
-    const cy = -1; // course center z offset
-    const wallH = 1;
-    const wallT = 0.5;
-
-    // Top (far end)
-    this.addWall(this.COURSE_WIDTH, wallH, wallT, 0, wallH / 2, cy - hd - wallT / 2, 0x3a7a3a);
-    // Bottom (near end)
-    this.addWall(this.COURSE_WIDTH, wallH, wallT, 0, wallH / 2, cy + hd + wallT / 2, 0x3a7a3a);
-    // Left
-    this.addWall(wallT, wallH, this.COURSE_DEPTH, -hw - wallT / 2, wallH / 2, cy, 0x3a7a3a);
-    // Right
-    this.addWall(wallT, wallH, this.COURSE_DEPTH, hw + wallT / 2, wallH / 2, cy, 0x3a7a3a);
+  private createSurroundingTerrain(): void {
+    const grassGeo = new THREE.PlaneGeometry(60, 60);
+    const grassMat = new THREE.MeshStandardMaterial({
+      color: 0x4a8a2a,
+      roughness: 1,
+      metalness: 0,
+    });
+    const grassMesh = new THREE.Mesh(grassGeo, grassMat);
+    grassMesh.rotation.x = -Math.PI / 2;
+    grassMesh.position.set(0, -0.01, -11);
+    grassMesh.receiveShadow = true;
+    this.engine.scene.add(grassMesh);
   }
+
+  // --- Course Surface ---
+
+  private createCourseSurface(): void {
+    // Shape coords: X = world X, Y = -world Z (rotation maps Y → -Z)
+    const shape = new THREE.Shape();
+    shape.moveTo(1.5, 0);
+    shape.lineTo(1.5, 14);
+    shape.lineTo(3, 18);
+    shape.lineTo(4, 18);
+    shape.lineTo(4, 22);
+    shape.lineTo(-4, 22);
+    shape.lineTo(-4, 18);
+    shape.lineTo(-3, 18);
+    shape.lineTo(-1.5, 14);
+    shape.lineTo(-1.5, 0);
+    shape.closePath();
+
+    // Bright green felt playing surface
+    const surfaceGeo = new THREE.ShapeGeometry(shape);
+    const surfaceMat = new THREE.MeshStandardMaterial({
+      color: this.SURFACE_COLOR,
+      roughness: 0.9,
+      metalness: 0,
+    });
+    const surfaceMesh = new THREE.Mesh(surfaceGeo, surfaceMat);
+    surfaceMesh.rotation.x = -Math.PI / 2;
+    surfaceMesh.position.y = 0.01;
+    surfaceMesh.receiveShadow = true;
+    this.engine.scene.add(surfaceMesh);
+
+    // Dark border base slightly larger than the playing surface
+    const border = 0.3;
+    const baseShape = new THREE.Shape();
+    baseShape.moveTo(1.5 + border, -border);
+    baseShape.lineTo(1.5 + border, 14);
+    baseShape.lineTo(3 + border, 18);
+    baseShape.lineTo(4 + border, 18);
+    baseShape.lineTo(4 + border, 22 + border);
+    baseShape.lineTo(-4 - border, 22 + border);
+    baseShape.lineTo(-4 - border, 18);
+    baseShape.lineTo(-3 - border, 18);
+    baseShape.lineTo(-1.5 - border, 14);
+    baseShape.lineTo(-1.5 - border, -border);
+    baseShape.closePath();
+
+    const baseGeo = new THREE.ShapeGeometry(baseShape);
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x222222,
+      roughness: 0.8,
+    });
+    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+    baseMesh.rotation.x = -Math.PI / 2;
+    baseMesh.position.y = -0.005;
+    baseMesh.receiveShadow = true;
+    this.engine.scene.add(baseMesh);
+  }
+
+  // --- Perimeter Walls ---
+
+  private createPerimeterWalls(): void {
+    const wh = this.WALL_HEIGHT;
+    const wt = this.WALL_THICKNESS;
+    const c = this.WALL_COLOR;
+
+    // Back wall (start, at z ≈ 0)
+    this.addWall(3.5, wh, wt, 0, wh / 2, wt / 2, c);
+
+    // Right wall: entrance + maze (z=0 → z=-14)
+    this.addWall(wt, wh, 14.5, 1.5 + wt / 2, wh / 2, -7, c);
+
+    // Right funnel (z=-14 → z=-18, angled)
+    this.addWallSegment(1.5, -14, 3, -18, wh, wt, c);
+
+    // Right step at z=-18 (bridges funnel → green)
+    this.addWall(1.5, wh, wt, 3.5, wh / 2, -18, c);
+
+    // Right green wall (z=-18 → z=-22)
+    this.addWall(wt, wh, 4.5, 4 + wt / 2, wh / 2, -20, c);
+
+    // Far wall (end)
+    this.addWall(8.5, wh, wt, 0, wh / 2, -22 - wt / 2, c);
+
+    // Left green wall (z=-22 → z=-18)
+    this.addWall(wt, wh, 4.5, -4 - wt / 2, wh / 2, -20, c);
+
+    // Left step at z=-18
+    this.addWall(1.5, wh, wt, -3.5, wh / 2, -18, c);
+
+    // Left funnel (z=-18 → z=-14, angled)
+    this.addWallSegment(-3, -18, -1.5, -14, wh, wt, c);
+
+    // Left wall: entrance + maze (z=-14 → z=0)
+    this.addWall(wt, wh, 14.5, -1.5 - wt / 2, wh / 2, -7, c);
+  }
+
+  // --- Section 1: Entrance Corridor (z=0 → z=-6) ---
+
+  private createSection1Obstacles(): void {
+    // V-shaped angled walls narrowing the path
+    // Wall A: from (-1, z=-3) to (0, z=-5)
+    this.addWallSegment(-1, -3, 0, -5, this.BARRIER_HEIGHT, this.WALL_THICKNESS, this.WALL_COLOR);
+    // Wall B: from (1, z=-3) to (0, z=-5)
+    this.addWallSegment(1, -3, 0, -5, this.BARRIER_HEIGHT, this.WALL_THICKNESS, this.WALL_COLOR);
+  }
+
+  // --- Section 2: Central Maze (z=-6 → z=-14) ---
+
+  private createSection2Obstacles(): void {
+    const bh = this.BARRIER_HEIGHT;
+    const bt = this.BARRIER_THICKNESS;
+    const c = this.WALL_COLOR;
+
+    // Zig-zag barriers alternating sides (gap ≈ 1 unit for ball)
+    // Barrier 1 at z=-7: left-to-center, gap on right
+    this.addObstacleWall(2.0, bh, bt, -0.5, bh / 2, -7, c);
+    // Barrier 2 at z=-9: center-to-right, gap on left
+    this.addObstacleWall(2.0, bh, bt, 0.5, bh / 2, -9, c);
+    // Barrier 3 at z=-11: left-to-center, gap on right
+    this.addObstacleWall(2.0, bh, bt, -0.5, bh / 2, -11, c);
+    // Barrier 4 at z=-13: center-to-right, gap on left
+    this.addObstacleWall(2.0, bh, bt, 0.5, bh / 2, -13, c);
+
+    // Central ramp-shaped guide
+    this.addObstacleWall(this.WALL_THICKNESS, bh, 1.5, 0, bh / 2, -10, c);
+  }
+
+  // --- Section 3: Transition Funnel (z=-14 → z=-18) ---
+
+  private createSection3Obstacles(): void {
+    // Two angled walls directing ball toward center
+    this.addWallSegment(
+      -1, -15, 0, -17.5, this.BARRIER_HEIGHT, this.WALL_THICKNESS, this.WALL_COLOR
+    );
+    this.addWallSegment(
+      1, -15, 0, -17.5, this.BARRIER_HEIGHT, this.WALL_THICKNESS, this.WALL_COLOR
+    );
+  }
+
+  // --- Wall Helpers ---
 
   private addWall(
     sx: number,
@@ -189,7 +302,7 @@ export class GolfMode extends GameMode {
     this.wallBodies.push(body);
 
     const geo = new THREE.BoxGeometry(sx, sy, sz);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(px, py, pz);
     mesh.castShadow = true;
@@ -197,80 +310,37 @@ export class GolfMode extends GameMode {
     this.engine.scene.add(mesh);
   }
 
-  // --- Hole & Flag ---
+  private addWallSegment(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    height: number,
+    thickness: number,
+    color: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.sqrt(dx * dx + dz * dz);
+    const angle = Math.atan2(-dz, dx);
+    const cx = (x1 + x2) / 2;
+    const cz = (z1 + z2) / 2;
 
-  private createHole(): void {
-    // Dark circle for the hole
-    const holeGeo = new THREE.CircleGeometry(this.HOLE_RADIUS, 32);
-    const holeMat = new THREE.MeshStandardMaterial({
-      color: 0x111111,
-      roughness: 1,
-    });
-    const holeMesh = new THREE.Mesh(holeGeo, holeMat);
-    holeMesh.rotation.x = -Math.PI / 2;
-    holeMesh.position.set(this.HOLE_X, 0.01, this.HOLE_Z);
-    this.engine.scene.add(holeMesh);
+    const shape = new CANNON.Box(new CANNON.Vec3(length / 2, height / 2, thickness / 2));
+    const body = new CANNON.Body({ mass: 0, shape, material: this.wallMaterial });
+    body.position.set(cx, height / 2, cz);
+    body.quaternion.setFromEuler(0, angle, 0);
+    this.engine.world.addBody(body);
+    this.wallBodies.push(body);
 
-    // White ring around hole
-    const ringGeo = new THREE.RingGeometry(this.HOLE_RADIUS, this.HOLE_RADIUS + 0.1, 32);
-    const ringMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.5,
-    });
-    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-    ringMesh.rotation.x = -Math.PI / 2;
-    ringMesh.position.set(this.HOLE_X, 0.015, this.HOLE_Z);
-    this.engine.scene.add(ringMesh);
-
-    // Flag pole
-    const poleGeo = new THREE.CylinderGeometry(0.03, 0.03, 3, 8);
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.6 });
-    const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.set(this.HOLE_X, 1.5, this.HOLE_Z);
-    pole.castShadow = true;
-    this.engine.scene.add(pole);
-
-    // Flag (triangle)
-    const flagShape = new THREE.Shape();
-    flagShape.moveTo(0, 0);
-    flagShape.lineTo(0.8, 0.25);
-    flagShape.lineTo(0, 0.5);
-    flagShape.closePath();
-    const flagGeo = new THREE.ShapeGeometry(flagShape);
-    const flagMat = new THREE.MeshStandardMaterial({
-      color: 0xff2222,
-      side: THREE.DoubleSide,
-      roughness: 0.4,
-    });
-    const flag = new THREE.Mesh(flagGeo, flagMat);
-    flag.position.set(this.HOLE_X, 2.5, this.HOLE_Z);
-    flag.rotation.y = -Math.PI / 2;
-    this.engine.scene.add(flag);
-  }
-
-  // --- Obstacles ---
-
-  private createObstacles(): void {
-    // Entry funnel walls near tee area
-    this.addObstacleWall(6, 0.6, 0.6, -4, 0.3, 6, 0x6b5b3a);
-    this.addObstacleWall(6, 0.6, 0.6, 4, 0.3, 6, 0x6b5b3a);
-
-    // Zigzag channel walls in mid-section
-    this.addObstacleWall(5, 0.6, 0.6, -3, 0.3, 2, 0x6b5b3a);
-    this.addObstacleWall(5, 0.6, 0.6, 3, 0.3, -1, 0x6b5b3a);
-
-    // Narrowing corridor approaching the hole
-    this.addObstacleWall(0.6, 0.6, 5, -3, 0.3, -8, 0x6b5b3a);
-    this.addObstacleWall(0.6, 0.6, 5, 3, 0.3, -8, 0x6b5b3a);
-
-    // Guard wall near the hole
-    this.addObstacleWall(3, 0.6, 0.6, 0, 0.3, -10, 0x6b5b3a);
-
-    // Side bumpers for ricochet fun
-    this.addBumper(-6, 0, 0.8, 0x8b7355);
-    this.addBumper(6, 0, 0.8, 0x8b7355);
-    this.addBumper(-5, -5, 0.7, 0x8b7355);
-    this.addBumper(5, -5, 0.7, 0x8b7355);
+    const geo = new THREE.BoxGeometry(length, height, thickness);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(cx, height / 2, cz);
+    mesh.rotation.y = angle;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.engine.scene.add(mesh);
   }
 
   private addObstacleWall(
@@ -289,11 +359,7 @@ export class GolfMode extends GameMode {
     this.obstacleBodies.push(body);
 
     const geo = new THREE.BoxGeometry(sx, sy, sz);
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.6,
-      metalness: 0.1,
-    });
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(px, py, pz);
     mesh.castShadow = true;
@@ -302,172 +368,58 @@ export class GolfMode extends GameMode {
     this.obstacleMeshes.push(mesh);
   }
 
-  private addBumper(x: number, z: number, radius: number, color: number): void {
-    const height = 0.6;
-    const shape = new CANNON.Cylinder(radius, radius, height, 16);
-    const body = new CANNON.Body({ mass: 0, shape, material: this.bumperMaterial });
-    body.position.set(x, height / 2, z);
-    this.engine.world.addBody(body);
-    this.obstacleBodies.push(body);
+  // --- Hole & Flag ---
 
-    const geo = new THREE.CylinderGeometry(radius, radius, height, 32);
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.5,
-      metalness: 0.2,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, height / 2, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    this.engine.scene.add(mesh);
-    this.obstacleMeshes.push(mesh);
-  }
-
-  // --- Sand Traps ---
-
-  private createSandTraps(): void {
-    this.addSandTrap(0, 4, 3, 2);
-    this.addSandTrap(-5, -3, 2.5, 2);
-    this.addSandTrap(5, -3, 2.5, 2);
-    this.addSandTrap(0, -6, 2, 1.5);
-  }
-
-  private addSandTrap(x: number, z: number, w: number, d: number): void {
-    const geo = new THREE.PlaneGeometry(w, d);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xd2b48c,
+  private createHole(): void {
+    // Dark circle for the hole
+    const holeGeo = new THREE.CircleGeometry(this.HOLE_RADIUS, 32);
+    const holeMat = new THREE.MeshStandardMaterial({
+      color: 0x111111,
       roughness: 1,
-      metalness: 0,
     });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(x, 0.005, z);
-    mesh.receiveShadow = true;
-    this.engine.scene.add(mesh);
-  }
+    const holeMesh = new THREE.Mesh(holeGeo, holeMat);
+    holeMesh.rotation.x = -Math.PI / 2;
+    holeMesh.position.set(this.HOLE_X, 0.02, this.HOLE_Z);
+    this.engine.scene.add(holeMesh);
 
-  // --- Windmill ---
-
-  private createWindmill(): void {
-    const wx = this.WINDMILL_X;
-    const wz = this.WINDMILL_Z;
-    this.windmillBladeBodies = [];
-
-    // Base (stone pillar)
-    const baseGeo = new THREE.CylinderGeometry(0.4, 0.5, 2.5, 16);
-    const baseMat = new THREE.MeshStandardMaterial({
-      color: 0x8b7355,
-      roughness: 0.7,
-      metalness: 0.1,
-    });
-    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-    baseMesh.position.set(wx, 1.25, wz);
-    baseMesh.castShadow = true;
-    baseMesh.receiveShadow = true;
-    this.engine.scene.add(baseMesh);
-    this.obstacleMeshes.push(baseMesh);
-
-    // Base physics body (static cylinder)
-    const baseShape = new CANNON.Cylinder(0.4, 0.5, 2.5, 16);
-    const baseBody = new CANNON.Body({ mass: 0, shape: baseShape });
-    baseBody.position.set(wx, 1.25, wz);
-    this.engine.world.addBody(baseBody);
-    this.obstacleBodies.push(baseBody);
-
-    // Roof (cone on top)
-    const roofGeo = new THREE.ConeGeometry(0.7, 1.0, 16);
-    const roofMat = new THREE.MeshStandardMaterial({
-      color: 0xcc4444,
+    // White ring around hole
+    const ringGeo = new THREE.RingGeometry(this.HOLE_RADIUS, this.HOLE_RADIUS + 0.08, 32);
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
       roughness: 0.5,
-      metalness: 0.1,
     });
-    const roofMesh = new THREE.Mesh(roofGeo, roofMat);
-    roofMesh.position.set(wx, 3.0, wz);
-    roofMesh.castShadow = true;
-    this.engine.scene.add(roofMesh);
-    this.obstacleMeshes.push(roofMesh);
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = -Math.PI / 2;
+    ringMesh.position.set(this.HOLE_X, 0.025, this.HOLE_Z);
+    this.engine.scene.add(ringMesh);
 
-    // Rotating blades group
-    this.windmillBlades = new THREE.Group();
-    this.windmillBlades.position.set(wx, 0.3, wz);
+    // Flag pole
+    const poleGeo = new THREE.CylinderGeometry(0.025, 0.025, 2.5, 8);
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.6 });
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.position.set(this.HOLE_X, 1.25, this.HOLE_Z);
+    pole.castShadow = true;
+    this.engine.scene.add(pole);
 
-    const bladeCount = 4;
-    const bladeLength = 3.0;
-    const bladeWidth = 0.6;
-    const bladeThickness = 0.2;
-
-    const bladeMat = new THREE.MeshStandardMaterial({
-      color: 0xdeb887,
-      roughness: 0.6,
-      metalness: 0.1,
+    // Flag (triangle)
+    const flagShape = new THREE.Shape();
+    flagShape.moveTo(0, 0);
+    flagShape.lineTo(0.6, 0.2);
+    flagShape.lineTo(0, 0.4);
+    flagShape.closePath();
+    const flagGeo = new THREE.ShapeGeometry(flagShape);
+    const flagMat = new THREE.MeshStandardMaterial({
+      color: 0xff2222,
+      side: THREE.DoubleSide,
+      roughness: 0.4,
     });
-
-    for (let i = 0; i < bladeCount; i++) {
-      const angle = (i / bladeCount) * Math.PI * 2;
-      const bladeGeo = new THREE.BoxGeometry(bladeLength, bladeThickness, bladeWidth);
-      const blade = new THREE.Mesh(bladeGeo, bladeMat);
-      blade.position.set(
-        (Math.cos(angle) * bladeLength) / 2,
-        0,
-        (Math.sin(angle) * bladeLength) / 2
-      );
-      blade.rotation.y = -angle;
-      blade.castShadow = true;
-      this.windmillBlades.add(blade);
-
-      // Physics body for each blade (kinematic)
-      const bladeShape = new CANNON.Box(
-        new CANNON.Vec3(bladeLength / 2, bladeThickness / 2, bladeWidth / 2)
-      );
-      const bladeBody = new CANNON.Body({ mass: 0, shape: bladeShape });
-      bladeBody.position.set(
-        wx + (Math.cos(angle) * bladeLength) / 2,
-        0.3,
-        wz + (Math.sin(angle) * bladeLength) / 2
-      );
-      this.engine.world.addBody(bladeBody);
-      this.windmillBladeBodies.push(bladeBody);
-    }
-
-    // Hub at center
-    const hubGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.3, 12);
-    const hubMat = new THREE.MeshStandardMaterial({
-      color: 0x666666,
-      metalness: 0.5,
-      roughness: 0.3,
-    });
-    const hub = new THREE.Mesh(hubGeo, hubMat);
-    hub.castShadow = true;
-    this.windmillBlades.add(hub);
-
-    this.engine.scene.add(this.windmillBlades);
-    this.obstacleMeshes.push(this.windmillBlades);
+    const flag = new THREE.Mesh(flagGeo, flagMat);
+    flag.position.set(this.HOLE_X, 2.1, this.HOLE_Z);
+    flag.rotation.y = -Math.PI / 2;
+    this.engine.scene.add(flag);
   }
 
-  private updateWindmillPhysics(): void {
-    const wx = this.WINDMILL_X;
-    const wz = this.WINDMILL_Z;
-    const currentAngle = this.windmillBlades.rotation.y;
-    const bladeCount = 4;
-    const bladeLength = 3.0;
-
-    for (let i = 0; i < bladeCount; i++) {
-      const baseAngle = (i / bladeCount) * Math.PI * 2;
-      const angle = baseAngle + currentAngle;
-      const body = this.windmillBladeBodies[i];
-      if (body) {
-        body.position.set(
-          wx + (Math.cos(angle) * bladeLength) / 2,
-          0.3,
-          wz + (Math.sin(angle) * bladeLength) / 2
-        );
-        body.quaternion.setFromEuler(0, -angle, 0);
-      }
-    }
-  }
-
-  // --- Player creation ---
+  // --- Player Creation ---
 
   private createPlayer(color: number, startX: number, startZ: number): PlayerState {
     const mesh = this.createBallMesh(this.BALL_RADIUS, color);
@@ -526,7 +478,7 @@ export class GolfMode extends GameMode {
     return line;
   }
 
-  // --- Update logic ---
+  // --- Update Logic ---
 
   private updatePlayer(
     player: PlayerState,
@@ -586,7 +538,7 @@ export class GolfMode extends GameMode {
 
     player.body.velocity.set(0, 0, 0);
     player.body.angularVelocity.set(0, 0, 0);
-    player.body.applyImpulse(new CANNON.Vec3(dirX * power, 0, dirZ * power), player.body.position);
+    player.body.applyImpulse(new CANNON.Vec3(dirX * power, 0, dirZ * power));
     player.strokes++;
   }
 
@@ -644,7 +596,7 @@ export class GolfMode extends GameMode {
     player.strokes = 0;
   }
 
-  // --- Aim / Power visuals ---
+  // --- Aim / Power Visuals ---
 
   private updateAimVisual(player: PlayerState): void {
     const bx = player.body.position.x;

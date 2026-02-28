@@ -28,8 +28,8 @@ export class FootballMode extends GameMode {
   private goalCurrentZ = 0;
   private goalCurrentY = 3;
   private goalMoveTimer = 0;
-  private readonly GOAL_MOVE_INTERVAL = 1.8;
-  private readonly GOAL_LERP_SPEED = 2.5;
+  private readonly GOAL_MOVE_INTERVAL = 2.5;
+  private readonly GOAL_LERP_SPEED = 4.0;
 
   // ── Goal dimensions ──
   private readonly GOAL_HALF_WIDTH = 3.5;
@@ -60,6 +60,18 @@ export class FootballMode extends GameMode {
   private readonly MIN_KICK_DIST_EPSILON = 0.01;
   private readonly WALL_BOUNCE_DAMPING = 0.85;
   private readonly FLOOR_BOUNCE_DAMPING = 0.6;
+
+  // ── Smooth movement constants ──
+  private readonly ACCEL_RATE = 10;   // exponential smoothing for acceleration
+  private readonly DECEL_RATE = 8;    // exponential smoothing for deceleration
+  private readonly TURN_RATE = 12;    // rotation smoothing speed
+  private readonly BOB_SPEED = 12;    // walking bob oscillation speed
+  private readonly BOB_AMOUNT = 0.08; // walking bob height
+  private readonly KICK_UP_FORCE = 0.4; // upward kick impulse fraction
+
+  // ── Walk bob phase ──
+  private p1BobPhase = 0;
+  private p2BobPhase = 0;
 
   // ── Physics materials ──
   private matGround!: CANNON.Material;
@@ -102,9 +114,9 @@ export class FootballMode extends GameMode {
   public update(delta: number): void {
     if (!this.isActive) {return;}
 
-    // ── Player movement (velocity-based, like sumo) ──
-    this.handleFootballMovement(this.p1Body, P1_CONTROLS);
-    this.handleFootballMovement(this.p2Body, P2_CONTROLS);
+    // ── Player movement (velocity-based, smooth acceleration) ──
+    this.handleFootballMovement(this.p1Body, P1_CONTROLS, delta);
+    this.handleFootballMovement(this.p2Body, P2_CONTROLS, delta);
 
     // ── Jump ──
     this.handleJump(this.p1Body, P1_CONTROLS.action2);
@@ -132,15 +144,19 @@ export class FootballMode extends GameMode {
     this.updateKickAnimation(this.p1Mesh, delta, 1);
     this.updateKickAnimation(this.p2Mesh, delta, 2);
 
+    // ── Walk bob animation ──
+    this.updateWalkBob(this.p1Mesh, this.p1Body, delta, 1);
+    this.updateWalkBob(this.p2Mesh, this.p2Body, delta, 2);
+
     // ── Random goal movement ──
     this.updateGoalMovement(delta);
 
     // ── Physics sync ──
     this.engine.syncPhysics();
 
-    // ── Face movement direction (after sync so mesh is positioned) ──
-    this.faceVelocity(this.p1Mesh, this.p1Body);
-    this.faceVelocity(this.p2Mesh, this.p2Body);
+    // ── Face movement direction (smooth rotation after sync) ──
+    this.faceVelocity(this.p1Mesh, this.p1Body, delta);
+    this.faceVelocity(this.p2Mesh, this.p2Body, delta);
 
     // ── Ball spin visual (rotate mesh by angular vel) ──
     this.ballMesh.rotation.x += this.ballBody.angularVelocity.x * delta;
@@ -691,6 +707,7 @@ export class FootballMode extends GameMode {
   private handleFootballMovement(
     body: CANNON.Body,
     controls: { up: string; down: string; left: string; right: string },
+    delta: number,
   ): void {
     const input = this.engine.input;
     let dirX = 0;
@@ -703,19 +720,28 @@ export class FootballMode extends GameMode {
 
     const len = Math.sqrt(dirX * dirX + dirZ * dirZ);
     if (len > 0) {
-      body.velocity.x = (dirX / len) * this.PLAYER_SPEED;
-      body.velocity.z = (dirZ / len) * this.PLAYER_SPEED;
+      const targetVx = (dirX / len) * this.PLAYER_SPEED;
+      const targetVz = (dirZ / len) * this.PLAYER_SPEED;
+      const t = 1 - Math.exp(-this.ACCEL_RATE * delta);
+      body.velocity.x += (targetVx - body.velocity.x) * t;
+      body.velocity.z += (targetVz - body.velocity.z) * t;
     } else {
-      body.velocity.x *= 0.8;
-      body.velocity.z *= 0.8;
+      const d = Math.exp(-this.DECEL_RATE * delta);
+      body.velocity.x *= d;
+      body.velocity.z *= d;
     }
   }
 
-  private faceVelocity(mesh: THREE.Group, body: CANNON.Body): void {
+  private faceVelocity(mesh: THREE.Group, body: CANNON.Body, delta: number): void {
     const vx = body.velocity.x;
     const vz = body.velocity.z;
     if (vx * vx + vz * vz > 0.5) {
-      mesh.rotation.y = Math.atan2(vx, vz);
+      const targetAngle = Math.atan2(vx, vz);
+      let diff = targetAngle - mesh.rotation.y;
+      while (diff > Math.PI) { diff -= Math.PI * 2; }
+      while (diff < -Math.PI) { diff += Math.PI * 2; }
+      const t = 1 - Math.exp(-this.TURN_RATE * delta);
+      mesh.rotation.y += diff * t;
     }
   }
 
@@ -744,8 +770,9 @@ export class FootballMode extends GameMode {
       const nz = dz * inv;
       // Reset ball velocity before kick for crisp response
       this.ballBody.velocity.set(0, 0, 0);
+      const kickY = Math.max(ny * this.KICK_FORCE * 0.7, this.KICK_FORCE * this.KICK_UP_FORCE);
       this.ballBody.applyImpulse(
-        new CANNON.Vec3(nx * this.KICK_FORCE, ny * this.KICK_FORCE * 0.7, nz * this.KICK_FORCE),
+        new CANNON.Vec3(nx * this.KICK_FORCE, kickY, nz * this.KICK_FORCE),
         new CANNON.Vec3(0, 0, 0),
       );
     }
@@ -778,6 +805,19 @@ export class FootballMode extends GameMode {
     }
   }
 
+  private updateWalkBob(mesh: THREE.Group, body: CANNON.Body, delta: number, pn: number): void {
+    const speed2 = body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z;
+    if (speed2 > 1) {
+      const phase = pn === 1
+        ? (this.p1BobPhase += this.BOB_SPEED * delta)
+        : (this.p2BobPhase += this.BOB_SPEED * delta);
+      mesh.position.y += Math.abs(Math.sin(phase)) * this.BOB_AMOUNT;
+    } else {
+      if (pn === 1) { this.p1BobPhase = 0; }
+      else { this.p2BobPhase = 0; }
+    }
+  }
+
   /* ================================================================
    *  GOAL MOVEMENT – random targets along Z and Y
    * ================================================================ */
@@ -792,9 +832,10 @@ export class FootballMode extends GameMode {
       this.goalTargetY = minY + Math.random() * (maxY - minY);
     }
 
-    // Smooth lerp towards target
-    this.goalCurrentZ += (this.goalTargetZ - this.goalCurrentZ) * this.GOAL_LERP_SPEED * delta;
-    this.goalCurrentY += (this.goalTargetY - this.goalCurrentY) * this.GOAL_LERP_SPEED * delta;
+    // Smooth frame-rate-independent lerp towards target
+    const t = 1 - Math.exp(-this.GOAL_LERP_SPEED * delta);
+    this.goalCurrentZ += (this.goalTargetZ - this.goalCurrentZ) * t;
+    this.goalCurrentY += (this.goalTargetY - this.goalCurrentY) * t;
 
     this.goal1Group.position.z = this.goalCurrentZ;
     this.goal2Group.position.z = this.goalCurrentZ;

@@ -142,14 +142,8 @@ export class GolfMode extends GameMode {
 
     this.p1Ball = this.scene.physics.add.image(80, 490, 'p1_golf');
     this.p2Ball = this.scene.physics.add.image(120, 490, 'p2_golf');
-    this.p1Ball.setDisplaySize(20, 20);
-    this.p2Ball.setDisplaySize(20, 20);
-    if (isArcadeBody(this.p1Ball.body)) {
-      this.p1Ball.body.setCircle(10, 14, 18);
-    }
-    if (isArcadeBody(this.p2Ball.body)) {
-      this.p2Ball.body.setCircle(10, 14, 18);
-    }
+    this.p1Ball.setScale(0.42);
+    this.p2Ball.setScale(0.42);
     this.p1Ball.setBounce(0.5).setDrag(100).setMaxVelocity(800, 800);
     this.p2Ball.setBounce(0.5).setDrag(100).setMaxVelocity(800, 800);
     this.p1Ball.setCollideWorldBounds(true);

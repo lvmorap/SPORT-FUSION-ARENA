@@ -112,6 +112,8 @@ export class F1Mode extends GameMode {
   private nextSpawnTime = 0;
   private penaltyLabelP1: THREE.Sprite | null = null;
   private penaltyLabelP2: THREE.Sprite | null = null;
+  private labelTextP1 = '';
+  private labelTextP2 = '';
 
   // ─── Lifecycle ──────────────────────────────────────────────
 
@@ -186,6 +188,8 @@ export class F1Mode extends GameMode {
     this.sceneObjects = [];
     this.penaltyLabelP1 = null;
     this.penaltyLabelP2 = null;
+    this.labelTextP1 = '';
+    this.labelTextP2 = '';
     this.powerUps = [];
     this.obstacles = [];
   }
@@ -599,6 +603,10 @@ export class F1Mode extends GameMode {
   }
 
   // ─── Checkpoints & Laps ─────────────────────────────────────
+  // Checkpoint 0 is at the finish line (t=0). Checkpoints 1-7 are
+  // intermediate markers. Cars start with nextCheckpoint=1 so they
+  // must traverse all intermediate checkpoints before crossing the
+  // finish line (checkpoint 0) to register a completed lap.
 
   private checkCheckpoints(state: CarState, _player: 'P1' | 'P2'): void {
     const cp = this.checkpointPositions[state.nextCheckpoint];
@@ -783,19 +791,25 @@ export class F1Mode extends GameMode {
   // ─── Labels ─────────────────────────────────────────────────
 
   private updatePenaltyLabels(): void {
-    this.penaltyLabelP1 = this.updatePenaltyLabel(
-      this.penaltyLabelP1, this.stateP1, this.carP1,
+    const result1 = this.updatePenaltyLabel(
+      this.penaltyLabelP1, this.labelTextP1, this.stateP1, this.carP1,
     );
-    this.penaltyLabelP2 = this.updatePenaltyLabel(
-      this.penaltyLabelP2, this.stateP2, this.carP2,
+    this.penaltyLabelP1 = result1.sprite;
+    this.labelTextP1 = result1.text;
+
+    const result2 = this.updatePenaltyLabel(
+      this.penaltyLabelP2, this.labelTextP2, this.stateP2, this.carP2,
     );
+    this.penaltyLabelP2 = result2.sprite;
+    this.labelTextP2 = result2.text;
   }
 
   private updatePenaltyLabel(
     existing: THREE.Sprite | null,
+    currentText: string,
     state: CarState,
     car: THREE.Group,
-  ): THREE.Sprite | null {
+  ): { sprite: THREE.Sprite | null; text: string } {
     const hasPenalty = state.penaltyTimer > 0;
     const hasMirror = state.mirrorTimer > 0;
     const hasTurbo = state.turboTimer > 0;
@@ -806,16 +820,22 @@ export class F1Mode extends GameMode {
       const text = hasPenalty ? 'PENALTY' : hasMirror ? '🪞 MIRROR' : hasTurbo ? '⚡ TURBO' : '🛑 SLOW';
       const color = hasPenalty ? COLORS.DANGER : hasMirror ? 0xaa44ff : hasTurbo ? 0xffee00 : 0xff4444;
 
-      if (!existing) {
+      if (!existing || currentText !== text) {
+        if (existing) {
+          existing.material.map?.dispose();
+          existing.material.dispose();
+          this.removeFromScene(existing);
+        }
         existing = this.createTextSprite(text, color);
         this.addToScene(existing);
       }
       existing.position.set(car.position.x, 2.2, car.position.z);
       existing.visible = true;
+      return { sprite: existing, text };
     } else if (existing) {
       existing.visible = false;
     }
-    return existing;
+    return { sprite: existing, text: '' };
   }
 
   private createTextSprite(text: string, color: number): THREE.Sprite {

@@ -67,7 +67,9 @@ export class FootballMode extends GameMode {
   private readonly TURN_RATE = 12;    // rotation smoothing speed
   private readonly BOB_SPEED = 12;    // walking bob oscillation speed
   private readonly BOB_AMOUNT = 0.08; // walking bob height
-  private readonly KICK_UP_FORCE = 0.4; // upward kick impulse fraction
+  private readonly MIN_KICK_UP_RATIO = 0.4; // minimum upward kick impulse as fraction of KICK_FORCE
+  private readonly KICK_VERTICAL_SCALE = 0.7; // scale factor for directional vertical kick component
+  private readonly MIN_BOB_SPEED_SQ = 1; // squared speed threshold (1 m/s) to trigger walk bob
 
   // ── Walk bob phase ──
   private p1BobPhase = 0;
@@ -770,7 +772,7 @@ export class FootballMode extends GameMode {
       const nz = dz * inv;
       // Reset ball velocity before kick for crisp response
       this.ballBody.velocity.set(0, 0, 0);
-      const kickY = Math.max(ny * this.KICK_FORCE * 0.7, this.KICK_FORCE * this.KICK_UP_FORCE);
+      const kickY = Math.max(ny * this.KICK_FORCE * this.KICK_VERTICAL_SCALE, this.KICK_FORCE * this.MIN_KICK_UP_RATIO);
       this.ballBody.applyImpulse(
         new CANNON.Vec3(nx * this.KICK_FORCE, kickY, nz * this.KICK_FORCE),
         new CANNON.Vec3(0, 0, 0),
@@ -807,7 +809,7 @@ export class FootballMode extends GameMode {
 
   private updateWalkBob(mesh: THREE.Group, body: CANNON.Body, delta: number, pn: number): void {
     const speed2 = body.velocity.x * body.velocity.x + body.velocity.z * body.velocity.z;
-    if (speed2 > 1) {
+    if (speed2 > this.MIN_BOB_SPEED_SQ) {
       const phase = pn === 1
         ? (this.p1BobPhase += this.BOB_SPEED * delta)
         : (this.p2BobPhase += this.BOB_SPEED * delta);
